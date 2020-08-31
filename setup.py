@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="MegafonAPI-robotkarl",  # Replace with your own username
-    version="0.0.2",
+    name="MegafonAPI",
+    version="0.0.3",
     author="Ilya Strukov",
     author_email="ilya@strukov.net",
     description="Python API implementation to work with Megafon business services",
