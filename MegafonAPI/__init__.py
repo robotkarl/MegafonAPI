@@ -71,7 +71,7 @@ class MegafonAPILK:
         self.__session.mount('https://{address}'.format(address=address), adapter = MegafonHttpAdapter())
         self.simcards = []
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, contentType = "application/json", method = "POST", parseRosponseJson = True, timeout = 5):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, contentType = "application/json", method = "POST", parseRosponseJson = True, timeout = 10):
         success = False
         response = None
         responsePayload = None
@@ -139,7 +139,7 @@ class MegafonAPILK:
             requestPayload = "captchaTime=undefined&password={password}&username={user}"
             logging.info("Loggin into the Megafon LK")
 
-            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8", timeout=10)["data"]
+            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8", timeout=30)["data"]
             if response and response["user"]:
                 self.__metadata = response
                 self.state.loggedin =  True
@@ -526,7 +526,7 @@ class MegafonAPIVATS:
         self.__session = Session()
         self.__session.mount('https://{address}'.format(address=address), MegafonHttpAdapter())
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, method="POST", contentType = "application/json", timeout = 5):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, method="POST", contentType = "application/json", timeout = 10):
         success = False
         response = None
         responsePayload = None
@@ -788,5 +788,31 @@ class MegafonAPIVATS:
             else:
                 __result = False
                 logging.info("Simcard {sim} removeing failed".format(sim=sim["tn"]))
+
+        return __result
+
+    def deleteUser(self, users: list) -> bool:
+        __result = True
+
+        requestUrl = "https://{address}/Sys/itlsysrpc.wcgp?__r={r}"
+
+
+        for user in users:
+            d = [
+                {
+                    "n": "itl_accounts_sys::remove",
+                    "p": [ user[""] ]
+                } 
+            ]
+            requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
+
+            logging.info("Attempting to delete user {user}/{userName}".format(user=user[""], userName=user["n"]))
+            response = self.__performQuery(requestUrl, requestPayload)
+
+            if response:
+                logging.info("User {user} successfully removed".format(user=user[""]))
+            else:
+                __result = False
+                logging.info("User {user} removeing failed".format(user=user[""]))
 
         return __result
