@@ -14,6 +14,8 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
 
+requestTimeout = 30
+
 class MegafonHttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
         self.poolmanager = PoolManager(num_pools=10, maxsize=200, block=block)
@@ -71,7 +73,7 @@ class MegafonAPILK:
         self.__session.mount('https://{address}'.format(address=address), adapter = MegafonHttpAdapter())
         self.simcards = []
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, contentType = "application/json", method = "POST", parseRosponseJson = True, timeout = 10):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, contentType = "application/json", method = "POST", parseRosponseJson = True, timeout = requestTimeout):
         success = False
         response = None
         responsePayload = None
@@ -139,7 +141,7 @@ class MegafonAPILK:
             requestPayload = "captchaTime=undefined&password={password}&username={user}"
             logging.info("Loggin into the Megafon LK")
 
-            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8", timeout=30)["data"]
+            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8")["data"]
             if response and response["user"]:
                 self.__metadata = response
                 self.state.loggedin =  True
@@ -526,7 +528,7 @@ class MegafonAPIVATS:
         self.__session = Session()
         self.__session.mount('https://{address}'.format(address=address), MegafonHttpAdapter())
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, method="POST", contentType = "application/json", timeout = 10):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, method="POST", contentType = "application/json", timeout = requestTimeout):
         success = False
         response = None
         responsePayload = None
@@ -612,7 +614,7 @@ class MegafonAPIVATS:
         requestPayload = '{{"s":"{authToken}","u":"{user}","d":[{{"n":"itlcs_telnums_sys::list","p":[]}}]}}'
 
         logging.info("Attempting to retrieve the list of connected SIM cards")
-        response = self.__performQuery(requestUrl, requestPayload, timeout=15)
+        response = self.__performQuery(requestUrl, requestPayload)
 
         if response:
             self.simcards = response[0]
@@ -630,7 +632,7 @@ class MegafonAPIVATS:
         requestPayload = '[{{"n":"itl_accounts::list","p":["c92a42ed-d713-4aa4-9e42-5cecf8803867",1,"name","asc",null,null,10000,false]}}]'
 
         logging.info("Attempting to retrieve the list of Users")
-        response = self.__performQuery(requestUrl, requestPayload, contentType='text/plain', timeout=15)
+        response = self.__performQuery(requestUrl, requestPayload, contentType='text/plain')
 
         if response and response[0] and response[0]["accounts"]:
             self.users = response[0]["accounts"]
@@ -815,4 +817,4 @@ class MegafonAPIVATS:
                 __result = False
                 logging.info("User {user} removeing failed".format(user=user[""]))
 
-        return __result
+        return __result        
