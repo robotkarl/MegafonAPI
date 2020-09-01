@@ -14,7 +14,7 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
 
-requestTimeout = 30
+requestTimeout = 15
 
 class MegafonHttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
