@@ -577,8 +577,8 @@ class MegafonAPIVATS:
                 loadfailed=loadFailed,
                 payload=responsePayload
             ))
-            if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401))):
-                if (not self.state.loggedin or responsePayload["error"] == "NOT_AUTHENTICATED" or response.status_code == 401) and not loginQuery:
+            if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
+                if (not self.state.loggedin or responsePayload["error"] == "NOT_AUTHENTICATED" or response.status_code == 401 or response.status_code == 403) and not loginQuery:
                     logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
                         responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, contentType=contentType, timeout=timeout)
