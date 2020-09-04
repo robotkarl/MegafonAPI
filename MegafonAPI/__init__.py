@@ -517,7 +517,7 @@ class MegafonAPIVATS:
     __password: string
     simcards: list
     users: list
-    json: list
+    json: dict
 
     def __init__(self, address, user, password):
         self.state = State()
@@ -525,9 +525,11 @@ class MegafonAPIVATS:
         self.__user = user
         self.__password = password
         self.__metadata = []
-        self.simcards = []
         self.__session = Session()
         self.__session.mount('https://{address}'.format(address=address), MegafonHttpAdapter())
+        self.simcards = []
+        self.users = []
+        self.json = {}
 
     def __performQuery(self, url: string, payload: string, loginQuery = False, method="POST", contentType = "application/json", timeout = requestTimeout):
         success = False
