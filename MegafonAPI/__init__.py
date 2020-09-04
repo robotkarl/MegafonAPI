@@ -517,6 +517,7 @@ class MegafonAPIVATS:
     __password: string
     simcards: list
     users: list
+    json: list
 
     def __init__(self, address, user, password):
         self.state = State()
