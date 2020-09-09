@@ -156,18 +156,18 @@ class MegafonAPILK:
     def getSimCards(self) -> bool:
         __result = False
         pageSize = 40
-        requestUrl = "https://{{address}}/ws/v1.0/subscriber/mobile/list?from={start}&size={size}"
+        requesListtUrl = "https://{{address}}/ws/v1.0/subscriber/mobile/list?from={start}&size={size}"
         rawcards = []
 
-        def fetch_one(page):
+        def fetchlist_one(page):
             """Fetching one page of card from LK server"""
             logging.debug("Attempting to retrieve the page №{page} of connected SIM cards".format(page=page+1))
-            result = self.__performQuery(requestUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
+            result = self.__performQuery(requesListtUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
             if not result:
                 raise Exception("The attempt to retrieve the page №{page} of connected SIM cards failed!".format(page=page+1))
             return result
             
-        async def fetch_all(pages):
+        async def fetchlist_all(pages):
             """Fetching all the page with simcards from LK server asyncronously"""
             with ThreadPoolExecutor(max_workers=20) as executor:
                 loop = asyncio.get_event_loop()
@@ -175,7 +175,7 @@ class MegafonAPILK:
                 tasks = [
                     loop.run_in_executor(
                         executor,
-                        fetch_one,
+                        fetchlist_one,
                         page
                     )
                     for page in range(pages)
@@ -186,17 +186,17 @@ class MegafonAPILK:
         try:
             logging.info("Getting simcardslist from LK server")
 
-            response = self.__performQuery(requestUrl.format(start=0, size=1), "", method="GET")["data"]
+            response = self.__performQuery(requesListtUrl.format(start=0, size=1), "", method="GET")["data"]
             if response:
                 logging.debug("There are {count} raw simcards in system. Getting them".format(count=response["count"]))
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                future = asyncio.ensure_future(fetch_all(math.ceil(int(response["count"])/pageSize)))
+                future = asyncio.ensure_future(fetchlist_all(math.ceil(int(response["count"])/pageSize)))
                 loop.run_until_complete(future)
 
                 if response["count"] == len(rawcards):
-                    logging.info("Successfully got all the simcars from LK server.")
+                    logging.info("Successfully got the simcard list from LK server.")
                     for rawcard in rawcards:
                         existingsim = None
                         for sim in filter(lambda x: x["id"] == rawcard["id"], self.simcards):
@@ -252,7 +252,7 @@ class MegafonAPILK:
                     sim["finance"] = {}
                 sim["finance"]["discounts"] = { "lastupdated": time.time(), "data": discounts }
                 __result = True
-                logging.info("Successfully retrieved remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+                logging.debug("Successfully retrieved remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             else:
                 logging.error("Failed retrieving remains info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
 
@@ -287,10 +287,11 @@ class MegafonAPILK:
                                 if not "finance" in sim:
                                     sim["finance"] = {}
                                 sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
+                                logging.debug("Successfully retrieved page №{page} of SIM card balances".format(page=page))
                         __result = True
                         break
                 except Exception as e:
-                    logging.error("[{attempt}] Failed retrieving the page №{page} of SIM cards balance. {e}".format(attempt=_, page=page, e=e))
+                    logging.error("[{attempt}] Failed retrieving the page №{page} of SIM card balance. {e}".format(attempt=_, page=page, e=e))
                     time.sleep(_/2)
                 
             return __result
@@ -310,7 +311,6 @@ class MegafonAPILK:
                 ]
                 await asyncio.gather(*tasks)
 
-
         def dcrules_fetch_one(sim):
             __result = False
             logging.debug("Attempting to retrieve dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
@@ -326,6 +326,7 @@ class MegafonAPILK:
                             resultRuleDetail = self.__performQuery(requestUrl.format(simID=sim["id"], ruleID=dcrule["subscriberDistributeChargesRuleSetId"]), "", method="GET")
                             if resultRuleDetail:
                                 dcrule["detail"] = resultRuleDetail['list']
+                                logging.debug("Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
                             else:
                                 dcrules = None
                                 raise Exception("Empty response?")
