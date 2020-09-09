@@ -188,11 +188,11 @@ class MegafonAPILK:
             logging.debug("Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             requesInfotUrl = "https://{{address}}/subscriber/info/{simID}"
             try:
-                result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]))
+                result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
                 html = pq(result)
-                for accountinfo in html.children("div.account-info__group"):
-                    label = accountinfo.children("label").text()
-                    data = accountinfo.children("div.user-status").text()
+                for accountinfo in html("div.account-info__group"):
+                    label = pq(accountinfo)("label").text()
+                    data = pq(accountinfo)("div.user-status").text()
                     if label == "Статус":
                         sim["raw"]["status"] = data
                     elif label == "Тарифный план":
@@ -207,7 +207,7 @@ class MegafonAPILK:
                 tasks = [
                     loop.run_in_executor(
                         executor,
-                        fetchlist_one,
+                        fetch_one,
                         sim
                     )
                     for sim in self.simcards
