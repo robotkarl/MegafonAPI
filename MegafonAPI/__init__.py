@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
+from pyquery import PyQuery as pq
 
 requestTimeout = 15
 
@@ -183,6 +184,36 @@ class MegafonAPILK:
                 for response in await asyncio.gather(*tasks):
                     rawcards.extend(response["elements"])
 
+        def fetch_one(sim):
+            logging.debug("Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            requesInfotUrl = "https://{{address}}/subscriber/info/{simID}"
+            try:
+                result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]))
+                html = pq(result)
+                for accountinfo in html.children("div.account-info__group"):
+                    label = accountinfo.children("label").text()
+                    data = accountinfo.children("div.user-status").text()
+                    if label == "Статус":
+                        sim["raw"]["status"] = data
+                    elif label == "Тарифный план":
+                        sim["raw"]["ratePlan"] = data
+            except Exception as e:
+                logging.warning("Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+
+        async def fetch_all():
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                loop = asyncio.get_event_loop()
+                asyncio.set_event_loop(loop)
+                tasks = [
+                    loop.run_in_executor(
+                        executor,
+                        fetchlist_one,
+                        sim
+                    )
+                    for sim in self.simcards
+                ]
+                await asyncio.gather(*tasks)
+
         try:
             logging.info("Getting simcardslist from LK server")
 
@@ -197,6 +228,7 @@ class MegafonAPILK:
 
                 if response["count"] == len(rawcards):
                     logging.info("Successfully got the simcard list from LK server.")
+
                     for rawcard in rawcards:
                         existingsim = None
                         for sim in filter(lambda x: x["id"] == rawcard["id"], self.simcards):
@@ -212,6 +244,10 @@ class MegafonAPILK:
                             isabsent = False
                         if isabsent:
                             self.simcards.remove(sim)
+
+                    logging.info("Getting actual info about every sim from the server")
+                    future = asyncio.ensure_future(fetch_all())
+                    loop.run_until_complete(future)
 
                     __result = True
 

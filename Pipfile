@@ -10,6 +10,7 @@ pipenv-setup = "*"
 requests = "*"
 urllib3 = "*"
 pytz = "*"
+pyquery = "*"
 
 [requires]
 python_version = "3.7"
