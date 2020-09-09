@@ -326,7 +326,6 @@ class MegafonAPILK:
                             resultRuleDetail = self.__performQuery(requestUrl.format(simID=sim["id"], ruleID=dcrule["subscriberDistributeChargesRuleSetId"]), "", method="GET")
                             if resultRuleDetail:
                                 dcrule["detail"] = resultRuleDetail['list']
-                                logging.debug("Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
                             else:
                                 dcrules = None
                                 raise Exception("Empty response?")
@@ -345,7 +344,7 @@ class MegafonAPILK:
                     sim["finance"] = {}
                 sim["finance"]["dcrules"] = { "lastupdated": time.time(), "data": dcrules }
                 __result = True
-                logging.info("Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+                logging.debug("Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             else:
                 logging.error("Failed retrieving dcrules info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
 
