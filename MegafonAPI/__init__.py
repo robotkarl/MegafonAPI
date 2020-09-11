@@ -74,7 +74,7 @@ class MegafonAPILK:
         self.__session.mount('https://{address}'.format(address=address), adapter = MegafonHttpAdapter())
         self.simcards = []
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, contentType = "application/json", method = "POST", parseRosponseJson = True, timeout = requestTimeout):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = False, timeout = requestTimeout):
         success = False
         response = None
         responsePayload = None
@@ -123,11 +123,11 @@ class MegafonAPILK:
                 loadfailed=loadFailed,
                 payload=responsePayload
             ))
-            if not self.state.loggedin or response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401)):
-                if (not self.state.loggedin or response.status_code == 401 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery :
+            if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
+                if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
                     logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
-                        responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, contentType=contentType, method=method, timeout=timeout)
+                        responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, contentType=contentType, timeout=timeout)
                         success = True
                     
         else:
@@ -142,15 +142,14 @@ class MegafonAPILK:
             requestPayload = "captchaTime=undefined&password={password}&username={user}"
             logging.info("Loggin into the Megafon LK")
 
-            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8")["data"]
-            if response and response["user"]:
-                self.__metadata = response
+            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8")
+            if response and "data" in response and "user" in response["data"] and response["data"]["user"]:
+                self.__metadata = response["data"]
                 self.state.loggedin =  True
                 logging.info("Successfully logged in to Megafon LK")
             else:
-                if response:
-                    if "error" in response and "code" in response["error"]:
-                        raise("Failed to login due to <{0}>".format(response["error"]["code"]))
+                if response and  "error" in response and "code" in response["error"]:
+                    raise Exception("Failed to login due to <{0}>".format(response["error"]["code"]))
                 else:
                     raise Exception("Got empty response from server")
         except Exception as e:
@@ -167,9 +166,20 @@ class MegafonAPILK:
         def fetchlist_one(page):
             """Fetching one page of card from LK server"""
             logging.debug("Attempting to retrieve the page №{page} of connected SIM cards".format(page=page+1))
-            result = self.__performQuery(requesListtUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
+            result = None
+
+            for _ in range(10):
+                try:
+                    result = self.__performQuery(requesListtUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
+                    fetched = True
+                    break
+                except Exception as e:
+                    result = None
+                    logging.error("[{attempt}] Failed retrieving sim list page №{page}. {e}".format(attempt=_,page=page, e=e))
+                    time.sleep(_/2)
             if not result:
                 raise Exception("The attempt to retrieve the page №{page} of connected SIM cards failed!".format(page=page+1))
+            
             return result
             
         async def fetchlist_all(pages):
@@ -571,7 +581,7 @@ class MegafonAPIVATS:
         self.users = []
         self.json = {}
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, method="POST", contentType = "application/json", timeout = requestTimeout):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
         success = False
         response = None
         responsePayload = None
@@ -586,11 +596,14 @@ class MegafonAPIVATS:
 
             fUrl = url.format(address=self.__address, r=r, s = "" if loginQuery else self.__metadata["s"])
             fData = payload.format(address=self.__address, user=self.__user, password=self.__password, authToken = "" if loginQuery else self.__metadata["s"])
+            headers = {'Content-Type': contentType}
+            if "XSRF_TOKEN" in self.__session.cookies:
+                headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
 
             logging.debug("[{r}] Performing a request".format(r=r))
             logging.debug(" [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
             try:
-                response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers={'Content-Type': contentType}, timeout=timeout)
+                response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
                 response.encoding = "UTF-8"
                 logging.debug("[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
             except Exception as e:
@@ -599,7 +612,7 @@ class MegafonAPIVATS:
             
             if not loadFailed:
                 try:
-                    responsePayload = json.loads(response.text)
+                    responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
                     logging.error("[{r}] Failed load response JSON: {e}".format(e=e, r=r))
                     logging.error("[{r}]  DATA: {d}".format(d=response.text, r=r))
@@ -607,7 +620,7 @@ class MegafonAPIVATS:
                 finally:
                     response.close()
 
-        if not loginQuery and (loadFailed or not self.state.loggedin or response.status_code != 200 or loadFailed or "error" in responsePayload):
+        if not loginQuery and (loadFailed or not self.state.loggedin or response.status_code != 200 or loadFailed or (parseRosponseJson and "error" in responsePayload and responsePayload["error"])):
             logging.warning("[{r}] Failed getting response from server".format(r=r))
             logging.debug(" [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
                 r=r,
@@ -618,11 +631,12 @@ class MegafonAPIVATS:
                 payload=responsePayload
             ))
             if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
-                if (not self.state.loggedin or responsePayload["error"] == "NOT_AUTHENTICATED" or response.status_code == 401 or response.status_code == 403) and not loginQuery:
+                if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
                     logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
                         responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, contentType=contentType, timeout=timeout)
                         success = True
+
         else:
             success = True
 
