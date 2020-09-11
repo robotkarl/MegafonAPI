@@ -148,7 +148,11 @@ class MegafonAPILK:
                 self.state.loggedin =  True
                 logging.info("Successfully logged in to Megafon LK")
             else:
-                raise Exception("Got empty response from server")
+                if response:
+                    if "error" in response and "code" in response["error"]:
+                        raise("Failed to login due to <{0}>".format(response["error"]["code"]))
+                else:
+                    raise Exception("Got empty response from server")
         except Exception as e:
             self.state.loggedin = False
             logging.error("Unable to login. [{exception}]".format(exception=e))
