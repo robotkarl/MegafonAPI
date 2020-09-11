@@ -74,7 +74,7 @@ class MegafonAPILK:
         self.__session.mount('https://{address}'.format(address=address), adapter = MegafonHttpAdapter())
         self.simcards = []
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = False, timeout = requestTimeout):
+    def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
         success = False
         response = None
         responsePayload = None
@@ -127,7 +127,7 @@ class MegafonAPILK:
                 if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
                     logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
-                        responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, contentType=contentType, timeout=timeout)
+                        responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, parseRosponseJson=parseRosponseJson, contentType=contentType, timeout=timeout)
                         success = True
                     
         else:
@@ -142,7 +142,7 @@ class MegafonAPILK:
             requestPayload = "captchaTime=undefined&password={password}&username={user}"
             logging.info("Loggin into the Megafon LK")
 
-            response = self.__performQuery(requestUrl, requestPayload, True, contentType="application/x-www-form-urlencoded;charset=UTF-8")
+            response = self.__performQuery(requestUrl, requestPayload, loginQuery=True, contentType="application/x-www-form-urlencoded;charset=UTF-8")
             if response and "data" in response and "user" in response["data"] and response["data"]["user"]:
                 self.__metadata = response["data"]
                 self.state.loggedin =  True
@@ -634,7 +634,7 @@ class MegafonAPIVATS:
                 if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
                     logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
-                        responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, contentType=contentType, timeout=timeout)
+                        responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, parseRosponseJson=parseRosponseJson, contentType=contentType, timeout=timeout)
                         success = True
 
         else:
@@ -650,7 +650,7 @@ class MegafonAPIVATS:
 
             logging.info("Loggin into the Megafon VATS")
             try:
-                response = self.__performQuery(requestUrl, requestPayload, True)
+                response = self.__performQuery(requestUrl, requestPayload, loginQuery=True)
                 if response:
                     self.__metadata = response[0]
                     self.state.loggedin =  True
