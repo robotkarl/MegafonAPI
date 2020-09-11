@@ -108,7 +108,7 @@ class MegafonAPILK:
                     responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
                     logging.error("[{r}] Failed load response JSON: {e}".format(e=e, r=r))
-                    logging.error("[{r}]  DATA: {d}".format(d=response.text, r=r))
+                    logging.debug("[{r}]  DATA: {d}".format(d=response.text, r=r))
                     loadFailed = True
                 finally:
                     response.close()
@@ -272,12 +272,97 @@ class MegafonAPILK:
 
         return __result
 
-    def getSimFinanceInfo(self, simlist: list):
+    def getSimBalanceInfo(self, simlist: list):
         """Fetching simcards finance info"""
 
         __result = False
 
-        logging.info("Attempting to retrieve the finance info for {count} simcards".format(count=len(simlist)))
+        logging.info("Attempting to retrieve balances info for {count} simcards".format(count=len(simlist)))
+        pageSize = 40
+
+        def balance_fetch_one(page):
+            __result = False
+            """Fetching one page of cards balance from LK server"""
+            for _ in range(10):
+                try:
+                    logging.debug("Attempting to retrieve the page №{page} of SIM cards balance".format(page=page+1))
+                    requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
+                    response = self.__performQuery(requestUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
+                    if not response:
+                        raise Exception("The attempt to retrieve the page №{page} of SIM cards balance failed!".format(page=page+1))
+                    else:
+                        for balanceinfo in response['elements']:
+                            for sim in filter(lambda x: x["id"] == str(balanceinfo["subscriberId"]), self.simcards):
+                                if not "finance" in sim:
+                                    sim["finance"] = {}
+                                sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
+                                logging.debug("Successfully retrieved page №{page} of SIM card balances".format(page=page))
+                        __result = True
+                        break
+                except Exception as e:
+                    logging.error("[{attempt}] Failed retrieving the page №{page} of SIM card balance. {e}".format(attempt=_, page=page, e=e))
+                    time.sleep(_/2)
+                
+            return __result
+
+        async def balance_fetch_all(pages):
+            """Fetching all the page with simcards from LK server asyncronously"""
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                loop = asyncio.get_event_loop()
+                asyncio.set_event_loop(loop)
+                tasks = [
+                    loop.run_in_executor(
+                        executor,
+                        balance_fetch_one,
+                        page
+                    )
+                    for page in range(pages)
+                ]
+                await asyncio.gather(*tasks)
+
+        #-- Balance
+        try:
+            logging.info("Getting simcards balance list from LK server")
+
+            # # Cleaning basket //POST
+            requestUrl = "https://b2blk.megafon.ru/ws/v1.0/subscriber/mobile/basket/delete"
+            requestPayload = "{{}}"
+            response = self.__performQuery(requestUrl, requestPayload)
+
+            # Adding sims to basket // POST
+            requestUrl = "https://{address}/ws/v1.0/subscriber/mobile/basket/add"
+            requestPayloadItems = [{"id": int(sim["id"]), "label": sim["msisdn"], "value": True} for sim in simlist]
+            requestPayload = '{{{{"items":{items}}}}}'.format(items=json.dumps(requestPayloadItems, ensure_ascii=False).replace('{','{{').replace('}','}}'))
+            response = self.__performQuery(requestUrl, requestPayload)
+
+            # Getting balance info // GET
+            requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
+            response = self.__performQuery(requestUrl.format(start=0, size=1), "", method="GET")["data"]
+            if response:
+                logging.debug("There are {count} raw simcard balance info in the system. Getting them".format(count=response["count"]))
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                future = asyncio.ensure_future(balance_fetch_all(math.ceil(int(response["count"])/pageSize)))
+                loop.run_until_complete(future)
+
+                __result = True
+                logging.info("Successfully got simcards balance list from LK server")
+
+            else:
+                raise Exception("Got empty response from server")
+        except Exception as e:
+            logging.error("Failed. [{exception}]".format(exception=e))
+        #-- Balance
+
+        return __result
+
+    def getSimRemainsInfo(self, simlist: list):
+        """Fetching simcards finance info"""
+
+        logging.info("Attempting to retrieve remains info for {count} simcards".format(count=len(simlist)))
+
+        __result = False
         pageSize = 40
 
         def remains_fetch_one(sim):
@@ -321,45 +406,28 @@ class MegafonAPILK:
                 ]
                 await asyncio.gather(*tasks)
 
-        def balance_fetch_one(page):
-            __result = False
-            """Fetching one page of cards balance from LK server"""
-            for _ in range(10):
-                try:
-                    logging.debug("Attempting to retrieve the page №{page} of SIM cards balance".format(page=page+1))
-                    requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
-                    response = self.__performQuery(requestUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
-                    if not response:
-                        raise Exception("The attempt to retrieve the page №{page} of SIM cards balance failed!".format(page=page+1))
-                    else:
-                        for balanceinfo in response['elements']:
-                            for sim in filter(lambda x: x["id"] == str(balanceinfo["subscriberId"]), self.simcards):
-                                if not "finance" in sim:
-                                    sim["finance"] = {}
-                                sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
-                                logging.debug("Successfully retrieved page №{page} of SIM card balances".format(page=page))
-                        __result = True
-                        break
-                except Exception as e:
-                    logging.error("[{attempt}] Failed retrieving the page №{page} of SIM card balance. {e}".format(attempt=_, page=page, e=e))
-                    time.sleep(_/2)
-                
-            return __result
+        #-- Remains
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        #future = asyncio.ensure_future(remains_fetch_all(list(filter(lambda sim: sim["raw"]["status"] == "Активен", simlist))))
+        future = asyncio.ensure_future(remains_fetch_all(simlist))
+        try:
+            loop.run_until_complete(future)
+            __result = True
+            logging.info("Successfully got simcards remains from LK server")
+        except Exception as e:
+            logging.warning("The attempt to retrieve the finance info for simcards failed. {e}".format(e=e))
+        #-- Remains
 
-        async def balance_fetch_all(pages):
-            """Fetching all the page with simcards from LK server asyncronously"""
-            with ThreadPoolExecutor(max_workers=20) as executor:
-                loop = asyncio.get_event_loop()
-                asyncio.set_event_loop(loop)
-                tasks = [
-                    loop.run_in_executor(
-                        executor,
-                        balance_fetch_one,
-                        page
-                    )
-                    for page in range(pages)
-                ]
-                await asyncio.gather(*tasks)
+        return __result
+
+    def getSimDCRulesInfo(self, simlist: list):
+        """Fetching simcards finance info"""
+
+        logging.info("Attempting to retrieve dcrules info for {count} simcards".format(count=len(simlist)))
+
+        __result = False
+        pageSize = 40
 
         def dcrules_fetch_one(sim):
             __result = False
@@ -413,53 +481,6 @@ class MegafonAPILK:
                 ]
                 await asyncio.gather(*tasks)
 
-        #-- Balance
-        try:
-            logging.info("Getting simcards balance list from LK server")
-
-            # # Cleaning basket //POST
-            requestUrl = "https://b2blk.megafon.ru/ws/v1.0/subscriber/mobile/basket/delete"
-            requestPayload = "{{}}"
-            response = self.__performQuery(requestUrl, requestPayload)
-
-            # Adding sims to basket // POST
-            requestUrl = "https://{address}/ws/v1.0/subscriber/mobile/basket/add"
-            requestPayloadItems = [{"id": int(sim["id"]), "label": sim["msisdn"], "value": True} for sim in simlist]
-            requestPayload = '{{{{"items":{items}}}}}'.format(items=json.dumps(requestPayloadItems, ensure_ascii=False).replace('{','{{').replace('}','}}'))
-            response = self.__performQuery(requestUrl, requestPayload)
-
-            # Getting balance info // GET
-            requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
-            response = self.__performQuery(requestUrl.format(start=0, size=1), "", method="GET")["data"]
-            if response:
-                logging.debug("There are {count} raw simcard balance info in the system. Getting them".format(count=response["count"]))
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                future = asyncio.ensure_future(balance_fetch_all(math.ceil(int(response["count"])/pageSize)))
-                loop.run_until_complete(future)
-
-                __result = True
-                logging.info("Successfully got simcards balance list from LK server")
-
-            else:
-                raise Exception("Got empty response from server")
-        except Exception as e:
-            logging.error("Failed. [{exception}]".format(exception=e))
-        #-- Balance
-
-        #-- Remains
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        #future = asyncio.ensure_future(remains_fetch_all(list(filter(lambda sim: sim["raw"]["status"] == "Активен", simlist))))
-        future = asyncio.ensure_future(remains_fetch_all(simlist))
-        try:
-            loop.run_until_complete(future)
-            __result = True
-        except Exception as e:
-            logging.warning("The attempt to retrieve the finance info for simcards failed. {e}".format(e=e))
-        #-- Remains
-
         #-- dcrules
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -468,6 +489,7 @@ class MegafonAPILK:
         try:
             loop.run_until_complete(future)
             __result = True
+            logging.info("Successfully got simcards dcrules from LK server")
         except Exception as e:
             logging.warning("The attempt to retrieve the finance dcrules for simcards failed. {e}".format(e=e))
         #-- dcrules
@@ -615,7 +637,7 @@ class MegafonAPIVATS:
                     responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
                     logging.error("[{r}] Failed load response JSON: {e}".format(e=e, r=r))
-                    logging.error("[{r}]  DATA: {d}".format(d=response.text, r=r))
+                    logging.debug("[{r}]  DATA: {d}".format(d=response.text, r=r))
                     loadFailed = True
                 finally:
                     response.close()
