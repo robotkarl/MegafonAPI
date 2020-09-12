@@ -58,6 +58,7 @@ class State:
         self.loggedin = False
 
 class MegafonAPILK:
+    name: str
     __metadata: dict
     state: State
     simcards: list
@@ -69,7 +70,8 @@ class MegafonAPILK:
 
     __qStats: list
 
-    def __init__(self, address, login, password):
+    def __init__(self, address, login, password, name=""):
+        self.name = name
         self.state = State()
         self.__address = address
         self.__user = login
@@ -83,6 +85,9 @@ class MegafonAPILK:
             "tMinBetweenQueries": 999999999999,
             "count": {}
         }
+
+    def log(self, level, message):
+        logging.log(level, "[LK-{name}] {message}".format(name=self.name, message=message))
 
     def __qStatsAdd(self, fUrl: str):
         t = time.time()
@@ -106,7 +111,7 @@ class MegafonAPILK:
 
     def qStatsPrint(self):
         qcs = sum(v for k, v in self.__qStats["count"].items())
-        logging.info("Performed {0} queries in {1} seconds with tMinDiff = {2}s".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"], self.__qStats["tMinBetweenQueries"]))
+        self.log(logging.INFO, "Performed {0} queries in {1} seconds with tMinDiff = {2}s".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"], self.__qStats["tMinBetweenQueries"]))
 
     def qWait(self):
         t = time.time() - self.__qStats["lastQuery"]
@@ -134,30 +139,30 @@ class MegafonAPILK:
             if "XSRF_TOKEN" in self.__session.cookies:
                 headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
 
-            logging.debug("[{r}] Performing a request".format(r=r))
-            logging.debug(" [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
+            self.log(logging.DEBUG, "[{r}] Performing a request".format(r=r))
+            self.log(logging.DEBUG, " [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
             try:
                 self.__qStatsAdd(fUrl)
                 response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
                 response.encoding = "UTF-8"
-                logging.debug("[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
+                self.log(logging.DEBUG, "[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
             except Exception as e:
                 loadFailed = True
-                logging.debug("[{r}] Exception occured during server query. {e}".format(r=r, e=e))
+                self.log(logging.DEBUG, "[{r}] Exception occured during server query. {e}".format(r=r, e=e))
             
             if not loadFailed:
                 try:
                     responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
-                    logging.error("[{r}] Failed load response JSON: {e}".format(e=e, r=r))
-                    logging.debug("[{r}]  DATA: {d}".format(d=response.text, r=r))
+                    self.log(logging.ERROR, "[{r}] Failed load response JSON: {e}".format(e=e, r=r))
+                    self.log(logging.DEBUG, "[{r}]  DATA: {d}".format(d=response.text, r=r))
                     loadFailed = True
                 finally:
                     response.close()
 
         if not loginQuery and (loadFailed or not self.state.loggedin or response.status_code != 200 or loadFailed or (parseRosponseJson and "error" in responsePayload and responsePayload["error"])):
-            logging.warning("[{r}] Failed getting response from server".format(r=r))
-            logging.debug(" [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
+            self.log(logging.WARNING, "[{r}] Failed getting response from server".format(r=r))
+            self.log(logging.DEBUG, " [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
                 r=r,
                 loginquery=loginQuery,
                 loggedin=self.state.loggedin,
@@ -167,7 +172,7 @@ class MegafonAPILK:
             ))
             if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
                 if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
-                    logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
+                    self.log(logging.INFO, "[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
                         responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, parseRosponseJson=parseRosponseJson, contentType=contentType, timeout=timeout)
                         success = True
@@ -182,13 +187,13 @@ class MegafonAPILK:
             self.state.loggedin = False
             requestUrl = "https://{address}/ws/v1.0/auth/process"
             requestPayload = "captchaTime=undefined&password={password}&username={user}"
-            logging.info("Loggin into the Megafon LK")
+            self.log(logging.INFO, "Loggin into the Megafon LK")
 
             response = self.__performQuery(requestUrl, requestPayload, loginQuery=True, contentType="application/x-www-form-urlencoded;charset=UTF-8")
             if response and "data" in response and "user" in response["data"] and response["data"]["user"]:
                 self.__metadata = response["data"]
                 self.state.loggedin =  True
-                logging.info("Successfully logged in to Megafon LK")
+                self.log(logging.INFO, "Successfully logged in to Megafon LK")
             else:
                 if response and  "error" in response and "code" in response["error"]:
                     raise Exception("Failed to login due to <{0}>".format(response["error"]["code"]))
@@ -196,7 +201,7 @@ class MegafonAPILK:
                     raise Exception("Got empty response from server")
         except Exception as e:
             self.state.loggedin = False
-            logging.error("Unable to login. [{exception}]".format(exception=e))
+            self.log(logging.ERROR, "Unable to login. [{exception}]".format(exception=e))
         return self.state.loggedin
 
     def getSimCards(self) -> bool:
@@ -207,7 +212,7 @@ class MegafonAPILK:
 
         def fetchlist_one(page):
             """Fetching one page of card from LK server"""
-            logging.debug("Attempting to retrieve the page №{page} of connected SIM cards".format(page=page+1))
+            self.log(logging.DEBUG, "Attempting to retrieve the page №{page} of connected SIM cards".format(page=page+1))
             result = None
 
             for _ in range(10):
@@ -217,7 +222,7 @@ class MegafonAPILK:
                     break
                 except Exception as e:
                     result = None
-                    logging.error("[{attempt}] Failed retrieving sim list page №{page}. {e}".format(attempt=_,page=page, e=e))
+                    self.log(logging.ERROR, "[{attempt}] Failed retrieving sim list page №{page}. {e}".format(attempt=_,page=page, e=e))
                     time.sleep(_/2)
             if not result:
                 raise Exception("The attempt to retrieve the page №{page} of connected SIM cards failed!".format(page=page+1))
@@ -241,7 +246,7 @@ class MegafonAPILK:
                     rawcards.extend(response["elements"])
 
         def fetch_one(sim):
-            logging.debug("Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, "Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             requesInfotUrl = "https://{{address}}/subscriber/info/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
@@ -254,7 +259,7 @@ class MegafonAPILK:
                     elif label == "Тарифный план":
                         sim["raw"]["ratePlan"] = data
             except Exception as e:
-                logging.warning("Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+                self.log(logging.WARNING, "Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
 
         async def fetch_all():
             with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
@@ -271,11 +276,11 @@ class MegafonAPILK:
                 await asyncio.gather(*tasks)
 
         try:
-            logging.info("Getting simcardslist from LK server")
+            self.log(logging.INFO, "Getting simcardslist from LK server")
 
             response = self.__performQuery(requesListtUrl.format(start=0, size=1), "", method="GET")["data"]
             if response:
-                logging.debug("There are {count} raw simcards in system. Getting them".format(count=response["count"]))
+                self.log(logging.DEBUG, "There are {count} raw simcards in system. Getting them".format(count=response["count"]))
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -283,7 +288,7 @@ class MegafonAPILK:
                 loop.run_until_complete(future)
 
                 if response["count"] == len(rawcards):
-                    logging.info("Successfully got the simcard list from LK server.")
+                    self.log(logging.INFO, "Successfully got the simcard list from LK server.")
 
                     for rawcard in rawcards:
                         existingsim = None
@@ -301,7 +306,7 @@ class MegafonAPILK:
                         if isabsent:
                             self.simcards.remove(sim)
 
-                    logging.info("Getting actual info about every sim from the server")
+                    self.log(logging.INFO, "Getting actual info about every sim from the server")
                     future = asyncio.ensure_future(fetch_all())
                     loop.run_until_complete(future)
 
@@ -310,7 +315,7 @@ class MegafonAPILK:
             else:
                 raise Exception("Got empty response from server")
         except Exception as e:
-            logging.error("Failed. [{exception}]".format(exception=e))
+            self.log(logging.ERROR, "Failed. [{exception}]".format(exception=e))
 
         return __result
 
@@ -319,7 +324,7 @@ class MegafonAPILK:
 
         __result = False
 
-        logging.info("Attempting to retrieve balances info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, "Attempting to retrieve balances info for {count} simcards".format(count=len(simlist)))
         pageSize = 40
 
         def balance_fetch_one(page):
@@ -327,7 +332,7 @@ class MegafonAPILK:
             """Fetching one page of cards balance from LK server"""
             for _ in range(10):
                 try:
-                    logging.debug("Attempting to retrieve the page №{page} of SIM cards balance".format(page=page+1))
+                    self.log(logging.DEBUG, "Attempting to retrieve the page №{page} of SIM cards balance".format(page=page+1))
                     requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
                     response = self.__performQuery(requestUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
                     if not response:
@@ -338,11 +343,11 @@ class MegafonAPILK:
                                 if not "finance" in sim:
                                     sim["finance"] = {}
                                 sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
-                                logging.debug("Successfully retrieved page №{page} of SIM card balances".format(page=page))
+                                self.log(logging.DEBUG, "Successfully retrieved page №{page} of SIM card balances".format(page=page))
                         __result = True
                         break
                 except Exception as e:
-                    logging.error("[{attempt}] Failed retrieving the page №{page} of SIM card balance. {e}".format(attempt=_, page=page, e=e))
+                    self.log(logging.ERROR, "[{attempt}] Failed retrieving the page №{page} of SIM card balance. {e}".format(attempt=_, page=page, e=e))
                     time.sleep(_/2)
                 
             return __result
@@ -364,7 +369,7 @@ class MegafonAPILK:
 
         #-- Balance
         try:
-            logging.info("Getting simcards balance list from LK server")
+            self.log(logging.INFO, "Getting simcards balance list from LK server")
 
             # # Cleaning basket //POST
             requestUrl = "https://b2blk.megafon.ru/ws/v1.0/subscriber/mobile/basket/delete"
@@ -381,7 +386,7 @@ class MegafonAPILK:
             requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
             response = self.__performQuery(requestUrl.format(start=0, size=1), "", method="GET")["data"]
             if response:
-                logging.debug("There are {count} raw simcard balance info in the system. Getting them".format(count=response["count"]))
+                self.log(logging.DEBUG, "There are {count} raw simcard balance info in the system. Getting them".format(count=response["count"]))
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -389,12 +394,12 @@ class MegafonAPILK:
                 loop.run_until_complete(future)
 
                 __result = True
-                logging.info("Successfully got simcards balance list from LK server")
+                self.log(logging.INFO, "Successfully got simcards balance list from LK server")
 
             else:
                 raise Exception("Got empty response from server")
         except Exception as e:
-            logging.error("Failed. [{exception}]".format(exception=e))
+            self.log(logging.ERROR, "Failed. [{exception}]".format(exception=e))
         #-- Balance
 
         return __result
@@ -402,14 +407,14 @@ class MegafonAPILK:
     def getSimRemainsInfo(self, simlist: list):
         """Fetching simcards finance info"""
 
-        logging.info("Attempting to retrieve remains info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, "Attempting to retrieve remains info for {count} simcards".format(count=len(simlist)))
 
         __result = False
         pageSize = 40
 
         def remains_fetch_one(sim):
             __result = False
-            logging.debug("Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, "Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             discounts: list = None
             for _ in range(10):
                 try:
@@ -421,7 +426,7 @@ class MegafonAPILK:
                         raise Exception("Empty response?")
                     break
                 except Exception as e:
-                    logging.error("[{attempt}] Failed retrieving remaining minutes info for simcard №{simID}/{simPN}. {e}".format(attempt=_,simID=sim["id"], simPN=sim["msisdn"], e=e))
+                    self.log(logging.ERROR, "[{attempt}] Failed retrieving remaining minutes info for simcard №{simID}/{simPN}. {e}".format(attempt=_,simID=sim["id"], simPN=sim["msisdn"], e=e))
                     time.sleep(_/2)
 
             if discounts != None:
@@ -429,9 +434,9 @@ class MegafonAPILK:
                     sim["finance"] = {}
                 sim["finance"]["discounts"] = { "lastupdated": time.time(), "data": discounts }
                 __result = True
-                logging.debug("Successfully retrieved remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.DEBUG, "Successfully retrieved remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             else:
-                logging.error("Failed retrieving remains info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.ERROR, "Failed retrieving remains info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
 
             return __result
 
@@ -456,9 +461,9 @@ class MegafonAPILK:
         try:
             loop.run_until_complete(future)
             __result = True
-            logging.info("Successfully got simcards remains from LK server")
+            self.log(logging.INFO, "Successfully got simcards remains from LK server")
         except Exception as e:
-            logging.warning("The attempt to retrieve the finance info for simcards failed. {e}".format(e=e))
+            self.log(logging.WARNING, "The attempt to retrieve the finance info for simcards failed. {e}".format(e=e))
         #-- Remains
 
         return __result
@@ -466,14 +471,14 @@ class MegafonAPILK:
     def getSimDCRulesInfo(self, simlist: list):
         """Fetching simcards finance info"""
 
-        logging.info("Attempting to retrieve dcrules info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, "Attempting to retrieve dcrules info for {count} simcards".format(count=len(simlist)))
 
         __result = False
         pageSize = 40
 
         def dcrules_fetch_one(sim):
             __result = False
-            logging.debug("Attempting to retrieve dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, "Attempting to retrieve dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             dcrules = None
             for _ in range(10):
                 try:
@@ -496,7 +501,7 @@ class MegafonAPILK:
                         raise Exception("Empty response?")
 
                 except Exception as e:
-                    logging.error("[{attempt}] Failed retrieving dcrules for simcard №{simID}/{simPN}. {e}".format(attempt=_,simID=sim["id"], simPN=sim["msisdn"], e=e))
+                    self.log(logging.ERROR, "[{attempt}] Failed retrieving dcrules for simcard №{simID}/{simPN}. {e}".format(attempt=_,simID=sim["id"], simPN=sim["msisdn"], e=e))
                     time.sleep(_/2)
 
             if dcrules != None:
@@ -504,9 +509,9 @@ class MegafonAPILK:
                     sim["finance"] = {}
                 sim["finance"]["dcrules"] = { "lastupdated": time.time(), "data": dcrules }
                 __result = True
-                logging.debug("Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.DEBUG, "Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             else:
-                logging.error("Failed retrieving dcrules info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.ERROR, "Failed retrieving dcrules info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
 
             return __result
 
@@ -531,9 +536,9 @@ class MegafonAPILK:
         try:
             loop.run_until_complete(future)
             __result = True
-            logging.info("Successfully got simcards dcrules from LK server")
+            self.log(logging.INFO, "Successfully got simcards dcrules from LK server")
         except Exception as e:
-            logging.warning("The attempt to retrieve the finance dcrules for simcards failed. {e}".format(e=e))
+            self.log(logging.WARNING, "The attempt to retrieve the finance dcrules for simcards failed. {e}".format(e=e))
         #-- dcrules
 
 
@@ -549,7 +554,7 @@ class MegafonAPILK:
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
-            logging.info("The order for clearing simcard's limits has been successfully created")
+            self.log(logging.INFO, "The order for clearing simcard's limits has been successfully created")
             __result = True
 
         return __result
@@ -564,8 +569,8 @@ class MegafonAPILK:
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
-            logging.info("The order for setting simcard's limits has been successfully created")
-            logging.info("DC rules successfully set")
+            self.log(logging.INFO, "The order for setting simcard's limits has been successfully created")
+            self.log(logging.INFO, "DC rules successfully set")
             __result = True
 
         return __result
@@ -581,7 +586,7 @@ class MegafonAPILK:
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
-            logging.info("The order for disabling simcards has been successfully created")
+            self.log(logging.INFO, "The order for disabling simcards has been successfully created")
             __result = True
         return __result
 
@@ -595,7 +600,7 @@ class MegafonAPILK:
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
-            logging.info("The order for disabling simcards has been successfully created")
+            self.log(logging.INFO, "The order for disabling simcards has been successfully created")
             __result = True
 
         return __result
@@ -616,12 +621,14 @@ class MegafonAPILK:
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response and "changeResult" in response and response["changeResult"]["cporId"] > 0:
-            logging.info("The order for simcards' plan change has been successfully created")
+            self.log(logging.INFO, "The order for simcards' plan change has been successfully created")
             __result = True
 
         return __result
 
 class MegafonAPIVATS:
+    name: str
+
     __metadata: dict
     __session: Session
 
@@ -633,7 +640,10 @@ class MegafonAPIVATS:
     users: list
     json: dict
 
-    def __init__(self, address, user, password):
+    __qStats: list
+
+    def __init__(self, address, user, password, name = ""):
+        self.name = name
         self.state = State()
         self.__address = address
         self.__user = user
@@ -644,8 +654,48 @@ class MegafonAPIVATS:
         self.simcards = []
         self.users = []
         self.json = {}
+        self.__qStats = {
+            "firstQuery": 999999999999,
+            "lastQuery": 0,
+            "tMinBetweenQueries": 999999999999,
+            "count": {}
+        }
+
+    def log(self, level, message):
+        logging.log(level, "[VATS-{name}] {message}".format(name=self.name, message=message))
+
+    def __qStatsAdd(self, fUrl: str):
+        t = time.time()
+
+        tMinBetweenQueries = t - self.__qStats["lastQuery"]
+        if tMinBetweenQueries < self.__qStats["tMinBetweenQueries"]:
+            self.__qStats["tMinBetweenQueries"] = tMinBetweenQueries
+
+        qpOffset = fUrl.find("?")
+        url = fUrl[0:qpOffset]
+
+        if not url in self.__qStats["count"]:
+            self.__qStats["count"][url] = 0
+        self.__qStats["count"][url] += 1
+
+        if t < self.__qStats["firstQuery"]:
+            self.__qStats["firstQuery"] = t
+
+        if t > self.__qStats["lastQuery"]:
+            self.__qStats["lastQuery"] = t
+
+    def qStatsPrint(self):
+        qcs = sum(v for k, v in self.__qStats["count"].items())
+        self.log(logging.INFO, "Performed {0} queries in {1} seconds with tMinDiff = {2}s".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"], self.__qStats["tMinBetweenQueries"]))
+
+    def qWait(self):
+        t = time.time() - self.__qStats["lastQuery"]
+        while t < (1/QPS):
+            time.sleep(0.001)
+            t = time.time() - self.__qStats["lastQuery"]
 
     def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
+        self.qWait()
         success = False
         response = None
         responsePayload = None
@@ -664,29 +714,30 @@ class MegafonAPIVATS:
             if "XSRF_TOKEN" in self.__session.cookies:
                 headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
 
-            logging.debug("[{r}] Performing a request".format(r=r))
-            logging.debug(" [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
+            self.log(logging.DEBUG, "[{r}] Performing a request".format(r=r))
+            self.log(logging.DEBUG, " [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
             try:
+                self.__qStatsAdd(fUrl)
                 response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
                 response.encoding = "UTF-8"
-                logging.debug("[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
+                self.log(logging.DEBUG, "[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
             except Exception as e:
                 loadFailed = True
-                logging.debug("[{r}] Exception occured during server query. {e}".format(r=r, e=e))
+                self.log(logging.DEBUG, "[{r}] Exception occured during server query. {e}".format(r=r, e=e))
             
             if not loadFailed:
                 try:
                     responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
-                    logging.error("[{r}] Failed load response JSON: {e}".format(e=e, r=r))
-                    logging.debug("[{r}]  DATA: {d}".format(d=response.text, r=r))
+                    self.log(logging.ERROR, "[{r}] Failed load response JSON: {e}".format(e=e, r=r))
+                    self.log(logging.DEBUG, "[{r}]  DATA: {d}".format(d=response.text, r=r))
                     loadFailed = True
                 finally:
                     response.close()
 
         if not loginQuery and (loadFailed or not self.state.loggedin or response.status_code != 200 or loadFailed or (parseRosponseJson and "error" in responsePayload and responsePayload["error"])):
-            logging.warning("[{r}] Failed getting response from server".format(r=r))
-            logging.debug(" [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
+            self.log(logging.WARNING, "[{r}] Failed getting response from server".format(r=r))
+            self.log(logging.DEBUG, " [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
                 r=r,
                 loginquery=loginQuery,
                 loggedin=self.state.loggedin,
@@ -696,7 +747,7 @@ class MegafonAPIVATS:
             ))
             if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
                 if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
-                    logging.info("[{r}] Not authenticated. Trying to login".format(r=r))
+                    self.log(logging.INFO, "[{r}] Not authenticated. Trying to login".format(r=r))
                     if self.__login():
                         responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, parseRosponseJson=parseRosponseJson, contentType=contentType, timeout=timeout)
                         success = True
@@ -712,20 +763,20 @@ class MegafonAPIVATS:
             requestUrl = "https://{address}/Sys/itlsysrpc.wcgp?__r={r}"
             requestPayload = '{{"s":null,"u":null,"d":[{{"n":"webauth::auth","p":[{{"d":"{address}","u":"{user}","p":"{password}","a":"Megafon3"}}]}}]}}'
 
-            logging.info("Loggin into the Megafon VATS")
+            self.log(logging.INFO, "Loggin into the Megafon VATS")
             try:
                 response = self.__performQuery(requestUrl, requestPayload, loginQuery=True)
                 if response:
                     self.__metadata = response[0]
                     self.state.loggedin =  True
-                    logging.info("Successfully authorized")
+                    self.log(logging.INFO, "Successfully authorized")
                 else:
                     raise Exception("Got empty response from server")
             except Exception as e:
-                logging.info("Authorization failed. {0}".format(e))
+                self.log(logging.INFO, "Authorization failed. {0}".format(e))
         except Exception as e:
             self.state.loggedin = False
-            logging.warning("Unable to login. [{exception}]".format(exception=e))
+            self.log(logging.WARNING, "Unable to login. [{exception}]".format(exception=e))
         return self.state.loggedin
 
     def getSimCards(self) -> bool:
@@ -734,7 +785,7 @@ class MegafonAPIVATS:
         requestUrl = "https://{address}/Sys/itlsysrpc.wcgp?__r={r}"
         requestPayload = '{{"s":"{authToken}","u":"{user}","d":[{{"n":"itlcs_telnums_sys::list","p":[]}}]}}'
 
-        logging.info("Attempting to retrieve the list of connected SIM cards")
+        self.log(logging.INFO, "Attempting to retrieve the list of connected SIM cards")
         response = self.__performQuery(requestUrl, requestPayload)
 
         if response:
@@ -742,7 +793,7 @@ class MegafonAPIVATS:
             result = True
         else:
             self.simcards = []
-        logging.info("Got {0} SIM cards from server".format(len(self.simcards)))
+        self.log(logging.INFO, "Got {0} SIM cards from server".format(len(self.simcards)))
 
         return result
 
@@ -752,7 +803,7 @@ class MegafonAPIVATS:
         requestUrl = "https://{address}/Session/{s}/itlrpc.wcgp?__r={r}"
         requestPayload = '[{{"n":"itl_accounts::list","p":["c92a42ed-d713-4aa4-9e42-5cecf8803867",1,"name","asc",null,null,10000,false]}}]'
 
-        logging.info("Attempting to retrieve the list of Users")
+        self.log(logging.INFO, "Attempting to retrieve the list of Users")
         response = self.__performQuery(requestUrl, requestPayload, contentType='text/plain')
 
         if response and response[0] and response[0]["accounts"]:
@@ -760,7 +811,7 @@ class MegafonAPIVATS:
             result = True
         else:
             self.users = []
-        logging.info("Got {0} Users from server".format(len(self.users)))
+        self.log(logging.INFO, "Got {0} Users from server".format(len(self.users)))
 
         return result
 
@@ -798,12 +849,12 @@ class MegafonAPIVATS:
         ]
         requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
 
-        logging.info("Attempting to disable simcards")
+        self.log(logging.INFO, "Attempting to disable simcards")
         response = self.__performQuery(requestUrl, requestPayload)
 
         if response:
             __result = True
-            logging.info("Simcards successfully disabled")
+            self.log(logging.INFO, "Simcards successfully disabled")
 
         return __result
 
@@ -847,12 +898,12 @@ class MegafonAPIVATS:
         ]
         requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
 
-        logging.info("Attempting to enable simcards")
+        self.log(logging.INFO, "Attempting to enable simcards")
         response = self.__performQuery(requestUrl, requestPayload)
 
         if response:
             __result = True
-            logging.info("Simcards successfully enabled")
+            self.log(logging.INFO, "Simcards successfully enabled")
 
         return __result
 
@@ -880,12 +931,12 @@ class MegafonAPIVATS:
         ]
         requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
 
-        logging.info("Attempting to connect simcards")
+        self.log(logging.INFO, "Attempting to connect simcards")
         response = self.__performQuery(requestUrl, requestPayload)
 
         if response:
             __result = True
-            logging.info("Simcards successfully connected")
+            self.log(logging.INFO, "Simcards successfully connected")
 
         return __result
 
@@ -903,14 +954,14 @@ class MegafonAPIVATS:
             ]
             requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
 
-            logging.info("Attempting to remove simcard {sim}".format(sim=sim["tn"]))
+            self.log(logging.INFO, "Attempting to remove simcard {sim}".format(sim=sim["tn"]))
             response = self.__performQuery(requestUrl, requestPayload)
 
             if response:
-                logging.info("Simcard {sim} successfully removed".format(sim=sim["tn"]))
+                self.log(logging.INFO, "Simcard {sim} successfully removed".format(sim=sim["tn"]))
             else:
                 __result = False
-                logging.info("Simcard {sim} removeing failed".format(sim=sim["tn"]))
+                self.log(logging.INFO, "Simcard {sim} removeing failed".format(sim=sim["tn"]))
 
         return __result
 
@@ -929,13 +980,13 @@ class MegafonAPIVATS:
             ]
             requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
 
-            logging.info("Attempting to delete user {user}/{userName}".format(user=user[""], userName=user["n"]))
+            self.log(logging.INFO, "Attempting to delete user {user}/{userName}".format(user=user[""], userName=user["n"]))
             response = self.__performQuery(requestUrl, requestPayload)
 
             if response:
-                logging.info("User {user} successfully removed".format(user=user[""]))
+                self.log(logging.INFO, "User {user} successfully removed".format(user=user[""]))
             else:
                 __result = False
-                logging.info("User {user} removeing failed".format(user=user[""]))
+                self.log(logging.INFO, "User {user} removeing failed".format(user=user[""]))
 
         return __result        
