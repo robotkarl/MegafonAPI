@@ -16,6 +16,7 @@ from urllib3.poolmanager import PoolManager
 from pyquery import PyQuery as pq
 
 requestTimeout = 15
+parallelRequests = 50
 
 class MegafonHttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
@@ -65,6 +66,8 @@ class MegafonAPILK:
     __user: string
     __password: string
 
+    __qStats: list
+
     def __init__(self, address, login, password):
         self.state = State()
         self.__address = address
@@ -73,6 +76,30 @@ class MegafonAPILK:
         self.__session = Session()
         self.__session.mount('https://{address}'.format(address=address), adapter = MegafonHttpAdapter())
         self.simcards = []
+        self.__qStats = {
+            "firstQuery": 999999999999,
+            "lastQuery": 0,
+            "count": {}
+        }
+
+    def __qStatsAdd(self, fUrl: str):
+        t = time.time()
+        qpOffset = fUrl.find("?")
+        url = fUrl[0:qpOffset]
+
+        if not url in self.__qStats["count"]:
+            self.__qStats["count"][url] = 0
+        self.__qStats["count"][url] += 1
+
+        if t < self.__qStats["firstQuery"]:
+            self.__qStats["firstQuery"] = t
+
+        if t > self.__qStats["lastQuery"]:
+            self.__qStats["lastQuery"] = t
+
+    def qStatsPrint(self):
+        qcs = sum(v for k, v in self.__qStats["count"].items())
+        logging.info("Performed {0} queries in {1} seconds".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"]))
 
     def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
         success = False
@@ -96,6 +123,7 @@ class MegafonAPILK:
             logging.debug("[{r}] Performing a request".format(r=r))
             logging.debug(" [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
             try:
+                self.__qStatsAdd(fUrl)
                 response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
                 response.encoding = "UTF-8"
                 logging.debug("[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
@@ -184,7 +212,7 @@ class MegafonAPILK:
             
         async def fetchlist_all(pages):
             """Fetching all the page with simcards from LK server asyncronously"""
-            with ThreadPoolExecutor(max_workers=20) as executor:
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
                 loop = asyncio.get_event_loop()
                 asyncio.set_event_loop(loop)
                 tasks = [
@@ -215,7 +243,7 @@ class MegafonAPILK:
                 logging.warning("Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
 
         async def fetch_all():
-            with ThreadPoolExecutor(max_workers=20) as executor:
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
                 loop = asyncio.get_event_loop()
                 asyncio.set_event_loop(loop)
                 tasks = [
@@ -307,7 +335,7 @@ class MegafonAPILK:
 
         async def balance_fetch_all(pages):
             """Fetching all the page with simcards from LK server asyncronously"""
-            with ThreadPoolExecutor(max_workers=20) as executor:
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
                 loop = asyncio.get_event_loop()
                 asyncio.set_event_loop(loop)
                 tasks = [
@@ -394,7 +422,7 @@ class MegafonAPILK:
             return __result
 
         async def remains_fetch_all(simlist):
-            with ThreadPoolExecutor(max_workers=20) as executor:
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
@@ -469,7 +497,7 @@ class MegafonAPILK:
             return __result
 
         async def dcrules_fetch_all(simlist):
-            with ThreadPoolExecutor(max_workers=20) as executor:
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
