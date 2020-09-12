@@ -17,6 +17,7 @@ from pyquery import PyQuery as pq
 
 requestTimeout = 15
 parallelRequests = 50
+QPS = 40
 
 class MegafonHttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
@@ -79,11 +80,17 @@ class MegafonAPILK:
         self.__qStats = {
             "firstQuery": 999999999999,
             "lastQuery": 0,
+            "tMinBetweenQueries": 999999999999,
             "count": {}
         }
 
     def __qStatsAdd(self, fUrl: str):
         t = time.time()
+
+        tMinBetweenQueries = t - self.__qStats["lastQuery"]
+        if tMinBetweenQueries < self.__qStats["tMinBetweenQueries"]:
+            self.__qStats["tMinBetweenQueries"] = tMinBetweenQueries
+
         qpOffset = fUrl.find("?")
         url = fUrl[0:qpOffset]
 
@@ -99,9 +106,16 @@ class MegafonAPILK:
 
     def qStatsPrint(self):
         qcs = sum(v for k, v in self.__qStats["count"].items())
-        logging.info("Performed {0} queries in {1} seconds".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"]))
+        logging.info("Performed {0} queries in {1} seconds with tMinDiff = {2}s".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"], self.__qStats["tMinBetweenQueries"]))
+
+    def qWait(self):
+        t = time.time() - self.__qStats["lastQuery"]
+        while t < (1/QPS):
+            time.sleep(0.001)
+            t = time.time() - self.__qStats["lastQuery"]
 
     def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
+        self.qWait()
         success = False
         response = None
         responsePayload = None
