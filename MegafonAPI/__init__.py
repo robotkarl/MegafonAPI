@@ -15,7 +15,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
 from pyquery import PyQuery as pq
 
-requestTimeout = 15
+requestTimeout = 30
 parallelRequests = 50
 QPS = 40
 
