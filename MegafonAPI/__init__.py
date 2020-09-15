@@ -330,7 +330,7 @@ class MegafonAPILK:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
                 html = pq(result)
                 services = []
-                for service in html(".item_category_content"):
+                for service in html(".item_category_content div"):
                     label = pq(service)("div").text()
                     services.append(label)
                 if len(services) > 0:
