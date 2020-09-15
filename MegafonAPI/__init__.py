@@ -17,7 +17,7 @@ from pyquery import PyQuery as pq
 
 requestTimeout = 30
 parallelRequests = 50
-QPS = 40
+QPS = 100
 
 class MegafonHttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
@@ -218,7 +218,6 @@ class MegafonAPILK:
             for _ in range(10):
                 try:
                     result = self.__performQuery(requesListtUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
-                    fetched = True
                     break
                 except Exception as e:
                     result = None
@@ -319,6 +318,53 @@ class MegafonAPILK:
 
         return __result
 
+    def getSimServicesInfo(self, simlist) -> bool:
+        self.log(logging.INFO, "Attempting to retrieve services info for {count} simcards".format(count=len(simlist)))
+
+        __result = False
+
+        def services_fetch_one(sim):
+            self.log(logging.DEBUG, "Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            requesInfotUrl = "https://{{address}}/subscriber/servicesAndRateoptions/{simID}"
+            try:
+                result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
+                html = pq(result)
+                services = []
+                for service in html(".item_category_content"):
+                    label = pq(service)("div").text()
+                    services.append(label)
+                if len(services) > 0:
+                    sim["services"] = services
+            except Exception as e:
+                self.log(logging.WARNING, "Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+
+        async def services_fetch_all(simlist):
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+                loop = asyncio.get_event_loop()
+                tasks = [
+                    loop.run_in_executor(
+                        executor,
+                        services_fetch_one,
+                        sim
+                    )
+                    for sim in simlist
+                ]
+                await asyncio.gather(*tasks)
+
+        #-- Services
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        future = asyncio.ensure_future(services_fetch_all(simlist))
+        try:
+            loop.run_until_complete(future)
+            __result = True
+            self.log(logging.INFO, "Successfully got simcards services from LK server")
+        except Exception as e:
+            self.log(logging.WARNING, "The attempt to retrieve the services info for simcards failed. {e}".format(e=e))
+        #-- Services
+
+        return __result
+
     def getSimBalanceInfo(self, simlist: list):
         """Fetching simcards finance info"""
 
@@ -410,7 +456,6 @@ class MegafonAPILK:
         self.log(logging.INFO, "Attempting to retrieve remains info for {count} simcards".format(count=len(simlist)))
 
         __result = False
-        pageSize = 40
 
         def remains_fetch_one(sim):
             __result = False
@@ -474,7 +519,6 @@ class MegafonAPILK:
         self.log(logging.INFO, "Attempting to retrieve dcrules info for {count} simcards".format(count=len(simlist)))
 
         __result = False
-        pageSize = 40
 
         def dcrules_fetch_one(sim):
             __result = False
@@ -540,7 +584,6 @@ class MegafonAPILK:
         except Exception as e:
             self.log(logging.WARNING, "The attempt to retrieve the finance dcrules for simcards failed. {e}".format(e=e))
         #-- dcrules
-
 
         return __result
 
