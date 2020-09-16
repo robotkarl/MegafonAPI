@@ -17,7 +17,7 @@ from pyquery import PyQuery as pq
 
 requestTimeout = 30
 parallelRequests = 50
-QPS = 100
+QPS = 40
 
 class MegafonHttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False):
