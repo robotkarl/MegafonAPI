@@ -324,7 +324,7 @@ class MegafonAPILK:
         __result = False
 
         def services_fetch_one(sim):
-            self.log(logging.DEBUG, "Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, "Attempting to retrieve services info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
             requesInfotUrl = "https://{{address}}/subscriber/servicesAndRateoptions/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
@@ -336,7 +336,7 @@ class MegafonAPILK:
                 if len(services) > 0:
                     sim["services"] = services
             except Exception as e:
-                self.log(logging.WARNING, "Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+                self.log(logging.WARNING, "Attempt to retrieve services info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
 
         async def services_fetch_all(simlist):
             with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
@@ -365,7 +365,7 @@ class MegafonAPILK:
 
         return __result
 
-    def getSimBalanceInfo(self, simlist: list):
+    def __getSimBalanceInfoOld(self, simlist: list):
         """Fetching simcards finance info"""
 
         __result = False
@@ -446,6 +446,85 @@ class MegafonAPILK:
                 raise Exception("Got empty response from server")
         except Exception as e:
             self.log(logging.ERROR, "Failed. [{exception}]".format(exception=e))
+        #-- Balance
+
+        return __result
+
+    def getSimBalanceInfo(self, simlist) -> bool:
+        self.log(logging.INFO, "Attempting to retrieve balance info for {count} simcards".format(count=len(simlist)))
+
+        __result = False
+
+        def balances_fetch_one(sim):
+            self.log(logging.DEBUG, "Attempting to retrieve balance info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            requesInfotUrl = "https://{{address}}/subscriber/finances/{simID}"
+            try:
+                result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
+                html = pq(result)
+                balanceinfo = {
+                    'amountTotal': 0.0,
+                    'monthChargeRTPL': 0.0,
+                    'amountCountryRoaming': 0.0,
+                    'monthChargeSRLS': 0.0,
+                    'charges': 0.0,
+                    'amountLocal': 0.0,
+                    'amountRoumnig': 0.0,
+                    'amountLocalMacro': 0.0
+                }
+
+                if html:
+                    for amountRow in html('.span50'):
+
+                        title = html(amountRow).prevAll()[0].text
+
+                        amountText = html(amountRow).find(".money").text()
+                        amountText = re.sub("[^0-9,]", "", amountText).replace(",", ".")
+                        amount = float(amountText)
+
+                        if title == 'Расходы с начала периода':
+                            balanceinfo['amountTotal'] += amount
+                        elif title == "Начисление":
+                            balanceinfo['monthChargeRTPL'] = 0 if amount > balanceinfo['amountTotal'] else amount
+                        elif title == "Блокировка корпоративных клиентов":
+                            balanceinfo['monthChargeSRLS'] += amount
+                        elif title == "Прочие услуги в домашнем регионе":
+                            balanceinfo['amountLocal'] += amount
+                        elif title == "По тарифному плану":
+                            pass
+                        elif title == "Баланс персонального счета":
+                            pass
+                        else:
+                            self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN}. Unknown balance title: '{title}'".format(simID=sim["id"], simPN=sim["msisdn"], title=title))
+                    else:
+                        if "finance" not in sim:
+                            sim["finance"] = {}
+                        sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
+            except Exception as e:
+                self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+
+        async def balances_fetch_all(simlist):
+            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+                loop = asyncio.get_event_loop()
+                tasks = [
+                    loop.run_in_executor(
+                        executor,
+                        balances_fetch_one,
+                        sim
+                    )
+                    for sim in simlist
+                ]
+                await asyncio.gather(*tasks)
+
+        #-- Balance
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        future = asyncio.ensure_future(balances_fetch_all(simlist))
+        try:
+            loop.run_until_complete(future)
+            __result = True
+            self.log(logging.INFO, "Successfully got simcards balance from LK server")
+        except Exception as e:
+            self.log(logging.WARNING, "The attempt to retrieve the balance info for simcards failed. {e}".format(e=e))
         #-- Balance
 
         return __result
