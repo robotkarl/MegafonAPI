@@ -502,7 +502,7 @@ class MegafonAPILK:
                     else:
                         if amountTotal > balanceinfo['amountTotal']:
                             balanceinfo['monthChargeRTPL'] += (amountTotal - balanceinfo['amountTotal'])
-                            balanceinfo['amountLocal'] = amountTotal
+                            balanceinfo['amountTotal'] = amountTotal
                         if "finance" not in sim:
                             sim["finance"] = {}
                         sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
