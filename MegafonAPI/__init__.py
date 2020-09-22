@@ -471,6 +471,7 @@ class MegafonAPILK:
                     'amountRoumnig': 0.0,
                     'amountLocalMacro': 0.0
                 }
+                amountTotal = 0
 
                 if html:
                     for amountRow in html('.span50'):
@@ -480,7 +481,6 @@ class MegafonAPILK:
                         amountText = html(amountRow).find(".money").text()
                         amountText = re.sub("[^0-9,]", "", amountText).replace(",", ".")
                         amount = float(amountText)
-                        amountTotal = 0
 
                         if title == 'Расходы с начала периода':
                             amountTotal = amount
