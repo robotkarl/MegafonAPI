@@ -482,11 +482,13 @@ class MegafonAPILK:
                         amount = float(amountText)
 
                         if title == 'Расходы с начала периода':
-                            balanceinfo['amountTotal'] += amount
+                            pass
                         elif title == "Начисление":
-                            balanceinfo['monthChargeRTPL'] = 0 if amount > balanceinfo['amountTotal'] else amount
+                            balanceinfo['monthChargeRTPL'] = amount
+                            balanceinfo['amountTotal'] += amount
                         elif title == "Блокировка корпоративных клиентов":
                             balanceinfo['monthChargeSRLS'] += amount
+                            balanceinfo['amountTotal'] += amount
                         elif title == "Прочие услуги в домашнем регионе":
                             balanceinfo['amountLocal'] += amount
                         elif title == "По тарифному плану":
