@@ -492,6 +492,7 @@ class MegafonAPILK:
                             balanceinfo['amountTotal'] += amount
                         elif title == "Прочие услуги в домашнем регионе":
                             balanceinfo['amountLocal'] += amount
+                            balanceinfo['amountTotal'] += amount
                         elif title == "По тарифному плану":
                             pass
                         elif title == "Баланс персонального счета":
@@ -499,8 +500,8 @@ class MegafonAPILK:
                         else:
                             self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN}. Unknown balance title: '{title}'".format(simID=sim["id"], simPN=sim["msisdn"], title=title))
                     else:
-                        if amountTotal > balanceinfo['amountLocal']:
-                            balanceinfo['monthChargeRTPL'] += (amountTotal - balanceinfo['amountLocal'])
+                        if amountTotal > balanceinfo['amountTotal']:
+                            balanceinfo['monthChargeRTPL'] += (amountTotal - balanceinfo['amountTotal'])
                             balanceinfo['amountLocal'] = amountTotal
                         if "finance" not in sim:
                             sim["finance"] = {}
