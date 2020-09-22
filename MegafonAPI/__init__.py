@@ -480,9 +480,10 @@ class MegafonAPILK:
                         amountText = html(amountRow).find(".money").text()
                         amountText = re.sub("[^0-9,]", "", amountText).replace(",", ".")
                         amount = float(amountText)
+                        amountTotal = 0
 
                         if title == 'Расходы с начала периода':
-                            pass
+                            amountTotal = amount
                         elif title == "Начисление":
                             balanceinfo['monthChargeRTPL'] = amount
                             balanceinfo['amountTotal'] += amount
@@ -498,6 +499,9 @@ class MegafonAPILK:
                         else:
                             self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN}. Unknown balance title: '{title}'".format(simID=sim["id"], simPN=sim["msisdn"], title=title))
                     else:
+                        if amountTotal > balanceinfo['amountLocal']:
+                            balanceinfo['monthChargeRTPL'] += (amountTotal - balanceinfo['amountLocal'])
+                            balanceinfo['amountLocal'] = amountTotal
                         if "finance" not in sim:
                             sim["finance"] = {}
                         sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
