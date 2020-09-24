@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="MegafonAPI",
-    version="0.0.29",
+    version="0.0.30",
     author="Ilya Strukov",
     author_email="ilya@strukov.net",
     description="Python API implementation to work with Megafon business services",
