@@ -290,19 +290,12 @@ class MegafonAPILK:
                     self.log(logging.INFO, "Successfully got the simcard list from LK server.")
 
                     for rawcard in rawcards:
-                        existingsim = None
-                        for sim in filter(lambda x: x["id"] == rawcard["id"], self.simcards):
-                            existingsim = sim
-                        
-                        if existingsim:
-                            existingsim["raw"] = rawcard
-                        else:
+                        existingsim = next(filter(lambda x: x["id"] == rawcard["id"], self.simcards), None):
+                        if not existingsim:
                             self.simcards.append({"id": rawcard["id"], "msisdn": rawcard["msisdn"], "raw": rawcard })
                     for sim in self.simcards:
-                        isabsent = True
-                        for rawcard in filter(lambda r: r["id"] == sim["id"], rawcards):
-                            isabsent = False
-                        if isabsent:
+                        rawcard = next(filter(lambda r: r["id"] == sim["id"], rawcards), None):
+                        if not rawcard:
                             self.simcards.remove(sim)
 
                     self.log(logging.INFO, "Getting actual info about every sim from the server")
