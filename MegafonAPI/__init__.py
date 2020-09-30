@@ -702,9 +702,9 @@ class MegafonAPILK:
 
         requestUrl = "https://{address}/changelock/order"
         simcards = ','.join([_["id"] for _ in simlist])
-        dateFrom = datetime.datetime.utcnow().strftime('%d.%m.%Y')
-        dateTo = (datetime.datetime.utcnow()+datetime.timedelta(days=365)).strftime('%d.%m.%Y')
-        requestPayload = '&p_basket=-1&notifySubsBySms=&operationType=1&dateFrom={dateFrom} 00:00:00&dateTo={dateTo} 00:00:00&cpohId=0&processingMode=1&subsId={simcards}'.format(dateFrom=dateFrom, dateTo=dateTo,simcards=simcards)
+        dateFrom = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+        dateTo = (datetime.datetime.now()+datetime.timedelta(days=365)).strftime('%d.%m.%Y')
+        requestPayload = '&p_basket=-1&notifySubsBySms=&operationType=1&dateFrom={dateFrom}:00&dateTo={dateTo} 00:00:00&cpohId=0&processingMode=1&subsId={simcards}'.format(dateFrom=dateFrom, dateTo=dateTo,simcards=simcards)
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
