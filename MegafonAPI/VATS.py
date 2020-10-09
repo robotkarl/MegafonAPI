@@ -1,17 +1,10 @@
 import logging
-import string
 import json
 import random
-import math
-import asyncio
 import time
 import datetime
-import pytz
-import re
-from concurrent.futures import ThreadPoolExecutor
 from requests import Session
-from pyquery import PyQuery as pq
-from MegafonAPI import State, QPS, parallelRequests, requestTimeout, HttpAdapter as MegafonHttpAdapter
+from MegafonAPI import State, BaseConsts, HttpAdapter as MegafonHttpAdapter
 
 class VATS:
     name: str
@@ -20,9 +13,9 @@ class VATS:
     __session: Session
 
     state: State
-    __address: string
-    __user: string
-    __password: string
+    __address: str
+    __user: str
+    __password: str
     simcards: list
     users: list
     json: dict
@@ -77,11 +70,11 @@ class VATS:
 
     def qWait(self):
         t = time.time() - self.__qStats["lastQuery"]
-        while t < (1/QPS):
+        while t < (1/BaseConsts.QPS.value):
             time.sleep(0.001)
             t = time.time() - self.__qStats["lastQuery"]
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
+    def __performQuery(self, url: str, payload: str, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = BaseConsts.requestTimeout.value):
         self.qWait()
         success = False
         response = None

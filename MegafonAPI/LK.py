@@ -1,17 +1,15 @@
 import logging
-import string
 import json
 import random
 import math
 import asyncio
 import time
 import datetime
-import pytz
 import re
 from concurrent.futures import ThreadPoolExecutor
 from requests import Session
 from pyquery import PyQuery as pq
-from MegafonAPI import State, QPS, parallelRequests, requestTimeout, HttpAdapter as MegafonHttpAdapter
+from MegafonAPI import State, BaseConsts, HttpAdapter as MegafonHttpAdapter
 
 class LK:
     name: str
@@ -20,9 +18,9 @@ class LK:
     simcards: list
 
     __session: Session
-    __address: string
-    __user: string
-    __password: string
+    __address: str
+    __user: str
+    __password: str
 
     __qStats: list
 
@@ -71,11 +69,11 @@ class LK:
 
     def qWait(self):
         t = time.time() - self.__qStats["lastQuery"]
-        while t < (1/QPS):
+        while t < (1/BaseConsts.QPS.value):
             time.sleep(0.001)
             t = time.time() - self.__qStats["lastQuery"]
 
-    def __performQuery(self, url: string, payload: string, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = requestTimeout):
+    def __performQuery(self, url: str, payload: str, loginQuery = False, method = "POST", contentType = "application/json", parseRosponseJson = True, timeout = BaseConsts.requestTimeout.value):
         self.qWait()
         success = False
         response = None
@@ -186,7 +184,7 @@ class LK:
             
         async def fetchlist_all(pages):
             """Fetching all the page with simcards from LK server asyncronously"""
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 asyncio.set_event_loop(loop)
                 tasks = [
@@ -217,7 +215,7 @@ class LK:
                 self.log(logging.WARNING, "Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
 
         async def fetch_all():
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 asyncio.set_event_loop(loop)
                 tasks = [
@@ -288,7 +286,7 @@ class LK:
                 self.log(logging.WARNING, "Attempt to retrieve services info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
 
         async def services_fetch_all(simlist):
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
@@ -349,7 +347,7 @@ class LK:
 
         async def balance_fetch_all(pages):
             """Fetching all the page with simcards from LK server asyncronously"""
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 asyncio.set_event_loop(loop)
                 tasks = [
@@ -459,7 +457,7 @@ class LK:
                 self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
 
         async def balances_fetch_all(simlist):
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
@@ -521,7 +519,7 @@ class LK:
             return __result
 
         async def remains_fetch_all(simlist):
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
@@ -595,7 +593,7 @@ class LK:
             return __result
 
         async def dcrules_fetch_all(simlist):
-            with ThreadPoolExecutor(max_workers=parallelRequests) as executor:
+            with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
@@ -683,7 +681,7 @@ class LK:
 
         return __result
 
-    def setSimPlan(self, simlist: list, plan: string):
+    def setSimPlan(self, simlist: list, plan: str):
         """
             Replaces active plan for listed simcards with the given by plan id
             e.g. 3382 - "Интернет Вещей"
