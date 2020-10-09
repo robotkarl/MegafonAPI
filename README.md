@@ -19,10 +19,13 @@
 1. Установка/снятие добровольной блокировки
 1. Установка лимитов
 
+### Пример
+```python
     from MegafonAPI import VATS
     vats = VATS("address", "user", "password", "name"])
     if vats.getSimCards():
       print(vats.simcards)
+```
 
   
 ## MagfonAPI.VATS
@@ -36,8 +39,11 @@
 1. Подключить(назначить) сим-карту свободному пользователю
 1. Отключить сим-карту
 
+### Пример
+```python
     from MegafonAPI import LK
     lk = LK("address", "user", "password", "name"])
     if lk.getSimCards():
       lk.getSimServicesInfo(lk.simcards)
       print(lk.simcards)
+```
