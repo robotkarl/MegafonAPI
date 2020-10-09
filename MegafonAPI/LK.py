@@ -11,7 +11,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from requests import Session
 from pyquery import PyQuery as pq
-from MegafonAPI import State, QPS, parallelRequests, requestTimeout, HTTPAdapter as MegafonHttpAdapter
+from MegafonAPI import State, QPS, parallelRequests, requestTimeout, HttpAdapter as MegafonHttpAdapter
 
 class LK:
     name: str
