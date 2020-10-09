@@ -31,7 +31,7 @@ class LK:
         self.__user = login
         self.__password = password
         self.__session = Session()
-        self.__session.mount('https://{address}'.format(address=address), adapter = MegafonHttpAdapter())
+        self.__session.mount(f"https://{address}", adapter = MegafonHttpAdapter())
         self.simcards = []
         self.__qStats = {
             "firstQuery": 999999999999,
@@ -41,7 +41,7 @@ class LK:
         }
 
     def log(self, level, message):
-        logging.log(level, "[LK-{name}] {message}".format(name=self.name, message=message))
+        logging.log(level, f"[LK-{self.name}] {message}")
 
     def __qStatsAdd(self, fUrl: str):
         t = time.time()
@@ -65,7 +65,7 @@ class LK:
 
     def qStatsPrint(self):
         qcs = sum(v for k, v in self.__qStats["count"].items())
-        self.log(logging.INFO, "Performed {0} queries in {1} seconds with tMinDiff = {2}s".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"], self.__qStats["tMinBetweenQueries"]))
+        self.log(logging.INFO, f"Performed {qcs} queries in {self.__qStats['lastQuery'] - self.__qStats['firstQuery']} seconds with tMinDiff = {self.__qStats['tMinBetweenQueries']}s")
 
     def qWait(self):
         t = time.time() - self.__qStats["lastQuery"]
@@ -93,40 +93,35 @@ class LK:
             if "XSRF_TOKEN" in self.__session.cookies:
                 headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
 
-            self.log(logging.DEBUG, "[{r}] Performing a request".format(r=r))
-            self.log(logging.DEBUG, " [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
+            self.log(logging.DEBUG, f"[{r}] Performing a request")
+            self.log(logging.DEBUG, f" [{r}] METHOD: {method}\n [{r}] URL: {fUrl}\n [{r}] CONTENT-TYPE: '{contentType}'\n [{r}] DATA: {fData}")
             try:
                 self.__qStatsAdd(fUrl)
                 response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
                 response.encoding = "UTF-8"
-                self.log(logging.DEBUG, "[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
+                self.log(logging.DEBUG, f"[{r}] Got {response.status_code} status code from server")
             except Exception as e:
                 loadFailed = True
-                self.log(logging.DEBUG, "[{r}] Exception occured during server query. {e}".format(r=r, e=e))
+                self.log(logging.DEBUG, f"[{r}] Exception occured during server query. {e}")
             
             if not loadFailed:
                 try:
                     responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
-                    self.log(logging.ERROR, "[{r}] Failed load response JSON: {e}".format(e=e, r=r))
-                    self.log(logging.DEBUG, "[{r}]  DATA: {d}".format(d=response.text, r=r))
+                    self.log(logging.ERROR, f"[{r}] Failed load response JSON: {e}")
+                    self.log(logging.DEBUG, f"[{r}]  DATA: {response.text}")
                     loadFailed = True
                 finally:
                     response.close()
 
         if not loginQuery and (loadFailed or not self.state.loggedin or response.status_code != 200 or loadFailed or (parseRosponseJson and "error" in responsePayload and responsePayload["error"])):
-            self.log(logging.WARNING, "[{r}] Failed getting response from server".format(r=r))
-            self.log(logging.DEBUG, " [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
-                r=r,
-                loginquery=loginQuery,
-                loggedin=self.state.loggedin,
-                statuscode=response.status_code if response else "",
-                loadfailed=loadFailed,
-                payload=responsePayload
-            ))
+            responseCode = response.status_code if response else ""
+
+            self.log(logging.WARNING, f"[{r}] Failed getting response from server")
+            self.log(logging.DEBUG, f" [{r}] LOGIN QUERY: {loginQuery}\n [{r}] LOGGED IN: {self.state.loggedin}\n [{r}] STATUS CODE: {responseCode}\n [{r}] LOAD FAILED: {loadFailed}\n [{r}] PAYLOAD: {responsePayload}")
             if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
                 if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
-                    self.log(logging.INFO, "[{r}] Not authenticated. Trying to login".format(r=r))
+                    self.log(logging.INFO, f"[{r}] Not authenticated. Trying to login")
                     if self.__login():
                         responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, parseRosponseJson=parseRosponseJson, contentType=contentType, timeout=timeout)
                         success = True
@@ -150,12 +145,12 @@ class LK:
                 self.log(logging.INFO, "Successfully logged in to Megafon LK")
             else:
                 if response and  "error" in response and "code" in response["error"]:
-                    raise Exception("Failed to login due to <{0}>".format(response["error"]["code"]))
+                    raise Exception(f"Failed to login due to <{response['error']['code']}>")
                 else:
                     raise Exception("Got empty response from server")
         except Exception as e:
             self.state.loggedin = False
-            self.log(logging.ERROR, "Unable to login. [{exception}]".format(exception=e))
+            self.log(logging.ERROR, f"Unable to login. [{e}]")
         return self.state.loggedin
 
     def getSimCards(self) -> bool:
@@ -166,7 +161,7 @@ class LK:
 
         def fetchlist_one(page):
             """Fetching one page of card from LK server"""
-            self.log(logging.DEBUG, "Attempting to retrieve the page №{page} of connected SIM cards".format(page=page+1))
+            self.log(logging.DEBUG, f"Attempting to retrieve the page №{page+1} of connected SIM cards")
             result = None
 
             for _ in range(10):
@@ -175,10 +170,10 @@ class LK:
                     break
                 except Exception as e:
                     result = None
-                    self.log(logging.ERROR, "[{attempt}] Failed retrieving sim list page №{page}. {e}".format(attempt=_,page=page, e=e))
+                    self.log(logging.ERROR, f"[{_}] Failed retrieving sim list page №{page}. {e}")
                     time.sleep(_/2)
             if not result:
-                raise Exception("The attempt to retrieve the page №{page} of connected SIM cards failed!".format(page=page+1))
+                raise Exception(f"The attempt to retrieve the page №{page+1} of connected SIM cards failed!")
             
             return result
             
@@ -199,7 +194,7 @@ class LK:
                     rawcards.extend(response["elements"])
 
         def fetch_one(sim):
-            self.log(logging.DEBUG, "Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, f"Attempting to retrieve remains info for simcard №{sim['id']}/{sim['msisdn']}")
             requesInfotUrl = "https://{{address}}/subscriber/info/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
@@ -212,7 +207,7 @@ class LK:
                     elif label == "Тарифный план":
                         sim["raw"]["ratePlan"] = data
             except Exception as e:
-                self.log(logging.WARNING, "Attempt to retrieve remains info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+                self.log(logging.WARNING, f"Attempt to retrieve remains info for simcard №{sim['id']}/{sim['msisdn']} failed. {e}")
 
         async def fetch_all():
             with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
@@ -233,7 +228,7 @@ class LK:
 
             response = self.__performQuery(requesListtUrl.format(start=0, size=1), "", method="GET")["data"]
             if response:
-                self.log(logging.DEBUG, "There are {count} raw simcards in system. Getting them".format(count=response["count"]))
+                self.log(logging.DEBUG, f"There are {response['count']} raw simcards in system. Getting them")
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -261,17 +256,17 @@ class LK:
             else:
                 raise Exception("Got empty response from server")
         except Exception as e:
-            self.log(logging.ERROR, "Failed. [{exception}]".format(exception=e))
+            self.log(logging.ERROR, f"Failed. [{e}]")
 
         return __result
 
     def getSimServicesInfo(self, simlist) -> bool:
-        self.log(logging.INFO, "Attempting to retrieve services info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, f"Attempting to retrieve services info for {len(simlist)} simcards")
 
         __result = False
 
         def services_fetch_one(sim):
-            self.log(logging.DEBUG, "Attempting to retrieve services info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, f"Attempting to retrieve services info for simcard №{sim['id']}/{sim['msisdn']}")
             requesInfotUrl = "https://{{address}}/subscriber/servicesAndRateoptions/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
@@ -283,7 +278,7 @@ class LK:
                 if len(services) > 0:
                     sim["services"] = services
             except Exception as e:
-                self.log(logging.WARNING, "Attempt to retrieve services info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+                self.log(logging.WARNING, f"Attempt to retrieve services info for simcard №{sim['id']}/{sim['msisdn']} failed. {e}")
 
         async def services_fetch_all(simlist):
             with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
@@ -307,7 +302,7 @@ class LK:
             __result = True
             self.log(logging.INFO, "Successfully got simcards services from LK server")
         except Exception as e:
-            self.log(logging.WARNING, "The attempt to retrieve the services info for simcards failed. {e}".format(e=e))
+            self.log(logging.WARNING, f"The attempt to retrieve the services info for simcards failed. {e}")
         #-- Services
 
         return __result
@@ -317,7 +312,7 @@ class LK:
 
         __result = False
 
-        self.log(logging.INFO, "Attempting to retrieve balances info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, f"Attempting to retrieve balances info for {len(simlist)} simcards")
         pageSize = 40
 
         def balance_fetch_one(page):
@@ -325,22 +320,22 @@ class LK:
             """Fetching one page of cards balance from LK server"""
             for _ in range(10):
                 try:
-                    self.log(logging.DEBUG, "Attempting to retrieve the page №{page} of SIM cards balance".format(page=page+1))
+                    self.log(logging.DEBUG, f"Attempting to retrieve the page №{page+1} of SIM cards balance")
                     requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
                     response = self.__performQuery(requestUrl.format(start=page*pageSize, size=pageSize), "", method="GET")["data"]
                     if not response:
-                        raise Exception("The attempt to retrieve the page №{page} of SIM cards balance failed!".format(page=page+1))
+                        raise Exception(f"The attempt to retrieve the page №{page+1} of SIM cards balance failed!")
                     else:
                         for balanceinfo in response['elements']:
                             for sim in filter(lambda x: x["id"] == str(balanceinfo["subscriberId"]), self.simcards):
                                 if not "finance" in sim:
                                     sim["finance"] = {}
                                 sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
-                                self.log(logging.DEBUG, "Successfully retrieved page №{page} of SIM card balances".format(page=page))
+                                self.log(logging.DEBUG, f"Successfully retrieved page №{page} of SIM card balances")
                         __result = True
                         break
                 except Exception as e:
-                    self.log(logging.ERROR, "[{attempt}] Failed retrieving the page №{page} of SIM card balance. {e}".format(attempt=_, page=page, e=e))
+                    self.log(logging.ERROR, f"[{_}] Failed retrieving the page №{page} of SIM card balance. {e}")
                     time.sleep(_/2)
                 
             return __result
@@ -372,14 +367,15 @@ class LK:
             # Adding sims to basket // POST
             requestUrl = "https://{address}/ws/v1.0/subscriber/mobile/basket/add"
             requestPayloadItems = [{"id": int(sim["id"]), "label": sim["msisdn"], "value": True} for sim in simlist]
-            requestPayload = '{{{{"items":{items}}}}}'.format(items=json.dumps(requestPayloadItems, ensure_ascii=False).replace('{','{{').replace('}','}}'))
+            items = json.dumps(requestPayloadItems, ensure_ascii=False).replace('{','{{').replace('}','}}')
+            requestPayload = f'{{{{"items":{items}}}}}'
             response = self.__performQuery(requestUrl, requestPayload)
 
             # Getting balance info // GET
             requestUrl = "https://{{address}}/ws/v1.0/expenses/subscriber/from/mobile/list?from={start}&size={size}"
             response = self.__performQuery(requestUrl.format(start=0, size=1), "", method="GET")["data"]
             if response:
-                self.log(logging.DEBUG, "There are {count} raw simcard balance info in the system. Getting them".format(count=response["count"]))
+                self.log(logging.DEBUG, f"There are {response['count']} raw simcard balance info in the system. Getting them")
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -392,18 +388,18 @@ class LK:
             else:
                 raise Exception("Got empty response from server")
         except Exception as e:
-            self.log(logging.ERROR, "Failed. [{exception}]".format(exception=e))
+            self.log(logging.ERROR, f"Failed. [{e}]")
         #-- Balance
 
         return __result
 
     def getSimBalanceInfo(self, simlist) -> bool:
-        self.log(logging.INFO, "Attempting to retrieve balance info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, f"Attempting to retrieve balance info for {len(simlist)} simcards")
 
         __result = False
 
         def balances_fetch_one(sim):
-            self.log(logging.DEBUG, "Attempting to retrieve balance info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, f"Attempting to retrieve balance info for simcard №{sim['id']}/{simPNsim['msisdn']}")
             requesInfotUrl = "https://{{address}}/subscriber/finances/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
@@ -445,7 +441,7 @@ class LK:
                         elif title == "Баланс персонального счета":
                             pass
                         else:
-                            self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN}. Unknown balance title: '{title}'".format(simID=sim["id"], simPN=sim["msisdn"], title=title))
+                            self.log(logging.WARNING, f"Attempt to retrieve balance info for simcard №{sim['id']}/{sim['msisdn']}. Unknown balance title: '{title}'")
                     else:
                         if amountTotal > balanceinfo['amountTotal']:
                             balanceinfo['monthChargeRTPL'] += (amountTotal - balanceinfo['amountTotal'])
@@ -454,7 +450,7 @@ class LK:
                             sim["finance"] = {}
                         sim["finance"]["balance"] = { "lastupdated": time.time(), "data": balanceinfo }
             except Exception as e:
-                self.log(logging.WARNING, "Attempt to retrieve balance info for simcard №{simID}/{simPN} failed. {e}".format(simID=sim["id"], simPN=sim["msisdn"], e=e))
+                self.log(logging.WARNING, f"Attempt to retrieve balance info for simcard №{sim['id']}/{sim['msisdn']} failed. {e}")
 
         async def balances_fetch_all(simlist):
             with ThreadPoolExecutor(max_workers=BaseConsts.parallelRequests.value) as executor:
@@ -478,7 +474,7 @@ class LK:
             __result = True
             self.log(logging.INFO, "Successfully got simcards balance from LK server")
         except Exception as e:
-            self.log(logging.WARNING, "The attempt to retrieve the balance info for simcards failed. {e}".format(e=e))
+            self.log(logging.WARNING, f"The attempt to retrieve the balance info for simcards failed. {e}")
         #-- Balance
 
         return __result
@@ -486,13 +482,13 @@ class LK:
     def getSimRemainsInfo(self, simlist: list):
         """Fetching simcards finance info"""
 
-        self.log(logging.INFO, "Attempting to retrieve remains info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, f"Attempting to retrieve remains info for {len(simlist)} simcards")
 
         __result = False
 
         def remains_fetch_one(sim):
             __result = False
-            self.log(logging.DEBUG, "Attempting to retrieve remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, f"Attempting to retrieve remains info for simcard №{sim['id']}/{sim['msisdn']}")
             discounts: list = None
             for _ in range(10):
                 try:
@@ -504,7 +500,7 @@ class LK:
                         raise Exception("Empty response?")
                     break
                 except Exception as e:
-                    self.log(logging.ERROR, "[{attempt}] Failed retrieving remaining minutes info for simcard №{simID}/{simPN}. {e}".format(attempt=_,simID=sim["id"], simPN=sim["msisdn"], e=e))
+                    self.log(logging.ERROR, f"[{attempt}] Failed retrieving remaining minutes info for simcard №{sim['id']}/{sim['msisdn']}. {e}")
                     time.sleep(_/2)
 
             if discounts != None:
@@ -512,9 +508,9 @@ class LK:
                     sim["finance"] = {}
                 sim["finance"]["discounts"] = { "lastupdated": time.time(), "data": discounts }
                 __result = True
-                self.log(logging.DEBUG, "Successfully retrieved remains info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.DEBUG, f"fSuccessfully retrieved remains info for simcard №{sim['id']}/{sim['msisdn']}.")
             else:
-                self.log(logging.ERROR, "Failed retrieving remains info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.ERROR, f"Failed retrieving remains info info for simcard №{sim['id']}/{sim['msisdn']}.")
 
             return __result
 
@@ -541,7 +537,7 @@ class LK:
             __result = True
             self.log(logging.INFO, "Successfully got simcards remains from LK server")
         except Exception as e:
-            self.log(logging.WARNING, "The attempt to retrieve the finance info for simcards failed. {e}".format(e=e))
+            self.log(logging.WARNING, f"The attempt to retrieve the finance info for simcards failed. {e}")
         #-- Remains
 
         return __result
@@ -549,13 +545,13 @@ class LK:
     def getSimDCRulesInfo(self, simlist: list):
         """Fetching simcards finance info"""
 
-        self.log(logging.INFO, "Attempting to retrieve dcrules info for {count} simcards".format(count=len(simlist)))
+        self.log(logging.INFO, f"Attempting to retrieve dcrules info for {len(simlist)} simcards")
 
         __result = False
 
         def dcrules_fetch_one(sim):
             __result = False
-            self.log(logging.DEBUG, "Attempting to retrieve dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+            self.log(logging.DEBUG, f"Attempting to retrieve dcrules info for simcard №{sim['id']}/{sim['msisdn']}")
             dcrules = None
             for _ in range(10):
                 try:
@@ -578,7 +574,7 @@ class LK:
                         raise Exception("Empty response?")
 
                 except Exception as e:
-                    self.log(logging.ERROR, "[{attempt}] Failed retrieving dcrules for simcard №{simID}/{simPN}. {e}".format(attempt=_,simID=sim["id"], simPN=sim["msisdn"], e=e))
+                    self.log(logging.ERROR, f"[{attempt}] Failed retrieving dcrules for simcard №{sim['id']}/{sim['msisdn']}. {e}")
                     time.sleep(_/2)
 
             if dcrules != None:
@@ -586,9 +582,9 @@ class LK:
                     sim["finance"] = {}
                 sim["finance"]["dcrules"] = { "lastupdated": time.time(), "data": dcrules }
                 __result = True
-                self.log(logging.DEBUG, "Successfully retrieved dcrules info for simcard №{simID}/{simPN}".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.DEBUG, f"Successfully retrieved dcrules info for simcard №{sim['id']}/{sim['msisdn']}.")
             else:
-                self.log(logging.ERROR, "Failed retrieving dcrules info info for simcard №{simID}/{simPN}.".format(simID=sim["id"], simPN=sim["msisdn"]))
+                self.log(logging.ERROR, f"Failed retrieving dcrules info info for simcard №{sim['id']}/{sim['msisdn']}.")
 
             return __result
 
@@ -615,7 +611,7 @@ class LK:
             __result = True
             self.log(logging.INFO, "Successfully got simcards dcrules from LK server")
         except Exception as e:
-            self.log(logging.WARNING, "The attempt to retrieve the finance dcrules for simcards failed. {e}".format(e=e))
+            self.log(logging.WARNING, f"The attempt to retrieve the finance dcrules for simcards failed. {e}")
         #-- dcrules
 
         return __result
@@ -626,7 +622,7 @@ class LK:
         requestUrl = "https://{address}/changedcrules/order"
         simcards = ','.join([_["id"] for _ in simlist])
         date = datetime.datetime.utcnow().strftime('%d.%m.%Y')
-        requestPayload = '&p_basket=-1&notifySubsBySms=&operationType=0&dateFrom={date}&ruleCommon=true&ruleSets=[{{{{"limits":[],"customerRuleSet":{{{{}}}},"commonRuleSet":{{{{}}}}}}}}]&cpohId=0&processingMode=1&subsId={simcards}'.format(date=date,simcards=simcards)
+        requestPayload = f'&p_basket=-1&notifySubsBySms=&operationType=0&dateFrom={date}&ruleCommon=true&ruleSets=[{{{{"limits":[],"customerRuleSet":{{{{}}}},"commonRuleSet":{{{{}}}}}}}}]&cpohId=0&processingMode=1&subsId={simcards}'
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
@@ -641,7 +637,7 @@ class LK:
         requestUrl = "https://{address}/changedcrules/order"
         simcards = ','.join([_["id"] for _ in simlist])
         date = datetime.datetime.utcnow().strftime('%d.%m.%Y')
-        requestPayload = "&p_basket=-1&notifySubsBySms=&operationType=1&dateFrom={date}&ruleCommon=true&ruleSets=[{{{{\"subscriberRuleSetId\":\"823\",\"ruleSetId\":\"823\",\"limits\":[{{{{\"ruleId\":\"847\",\"name\":\"АП по тарифу\",\"warnLimit\":\"5\",\"breakLimit\":\"{limit}\",\"limitMeasureUnit\":{{{{\"name\":\"Внутренняя валюта\",\"limitMeasureUnitId\":3,\"measureType\":2}}}}}}}}],\"commonRuleSet\":{{{{\"distributeChargesRuleCommonSetId\":823,\"name\":\"АП по тарифу\",\"status\":{{{{\"distributeChargesRuleCommonSetStatusId\":3,\"name\":\"Используется\"}}}},\"allowUse\":true,\"deleteDate\":null,\"deleteUser\":null,\"createDate\":1530822026000,\"createUser\":\"ROMAN_FEDOSEEV\",\"changeDate\":1530822026000,\"changeUser\":\"ROMAN_FEDOSEEV\",\"commonLimit\":{{{{\"distributeChargesRuleCode\":847,\"name\":\"Корпоративный счет, в рамках лимита\",\"applyToCharges\":[{{{{\"type\":\"OTHER_CHARGES\",\"name\":\"Прочие виды начислений\"}}}}],\"limit\":{{{{\"measureUnit\":{{{{\"limitMeasureUnitId\":3,\"name\":\"Внутренняя валюта\",\"abbreviation\":\"руб.\",\"measureType\":{{{{\"measureTypeId\":2,\"name\":\"Деньги\"}}}}}}}},\"break\":20,\"warning\":15}}}},\"childRules\":[]}}}},\"corporateRule\":{{{{\"distributeChargesRuleCode\":848,\"name\":\"Корпоративный счет\",\"applyToCharges\":[{{{{\"type\":\"CALL_CHARGES\",\"profile\":{{{{\"ratingProfileId\":305,\"name\":\"Абонентская плата (профиль АП по тарифу)\",\"measureType\":{{{{\"measureTypeId\":4,\"name\":\"Календарные единицы\"}}}}}}}}}}}},{{{{\"type\":\"PRODUCT_CHARGES\",\"profile\":{{{{\"productProfileId\":401,\"name\":\"Профиль \\\"АП по тарифу\\\"\"}}}}}}}}],\"childRules\":[]}}}},\"personalRule\":{{{{\"distributeChargesRuleCode\":849,\"name\":\"Персональный счет\",\"applyToCharges\":[],\"childRules\":[]}}}}}}}}}}}}]&cpohId=0&processingMode=1&subsId={simcards}".format(date=date,simcards=simcards, limit=limit)
+        requestPayload = f"&p_basket=-1&notifySubsBySms=&operationType=1&dateFrom={date}&ruleCommon=true&ruleSets=[{{{{\"subscriberRuleSetId\":\"823\",\"ruleSetId\":\"823\",\"limits\":[{{{{\"ruleId\":\"847\",\"name\":\"АП по тарифу\",\"warnLimit\":\"5\",\"breakLimit\":\"{limit}\",\"limitMeasureUnit\":{{{{\"name\":\"Внутренняя валюта\",\"limitMeasureUnitId\":3,\"measureType\":2}}}}}}}}],\"commonRuleSet\":{{{{\"distributeChargesRuleCommonSetId\":823,\"name\":\"АП по тарифу\",\"status\":{{{{\"distributeChargesRuleCommonSetStatusId\":3,\"name\":\"Используется\"}}}},\"allowUse\":true,\"deleteDate\":null,\"deleteUser\":null,\"createDate\":1530822026000,\"createUser\":\"ROMAN_FEDOSEEV\",\"changeDate\":1530822026000,\"changeUser\":\"ROMAN_FEDOSEEV\",\"commonLimit\":{{{{\"distributeChargesRuleCode\":847,\"name\":\"Корпоративный счет, в рамках лимита\",\"applyToCharges\":[{{{{\"type\":\"OTHER_CHARGES\",\"name\":\"Прочие виды начислений\"}}}}],\"limit\":{{{{\"measureUnit\":{{{{\"limitMeasureUnitId\":3,\"name\":\"Внутренняя валюта\",\"abbreviation\":\"руб.\",\"measureType\":{{{{\"measureTypeId\":2,\"name\":\"Деньги\"}}}}}}}},\"break\":20,\"warning\":15}}}},\"childRules\":[]}}}},\"corporateRule\":{{{{\"distributeChargesRuleCode\":848,\"name\":\"Корпоративный счет\",\"applyToCharges\":[{{{{\"type\":\"CALL_CHARGES\",\"profile\":{{{{\"ratingProfileId\":305,\"name\":\"Абонентская плата (профиль АП по тарифу)\",\"measureType\":{{{{\"measureTypeId\":4,\"name\":\"Календарные единицы\"}}}}}}}}}}}},{{{{\"type\":\"PRODUCT_CHARGES\",\"profile\":{{{{\"productProfileId\":401,\"name\":\"Профиль \\\"АП по тарифу\\\"\"}}}}}}}}],\"childRules\":[]}}}},\"personalRule\":{{{{\"distributeChargesRuleCode\":849,\"name\":\"Персональный счет\",\"applyToCharges\":[],\"childRules\":[]}}}}}}}}}}}}]&cpohId=0&processingMode=1&subsId={simcards}"
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
@@ -658,7 +654,7 @@ class LK:
         simcards = ','.join([_["id"] for _ in simlist])
         dateFrom = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
         dateTo = (datetime.datetime.now()+datetime.timedelta(days=365)).strftime('%d.%m.%Y')
-        requestPayload = '&p_basket=-1&notifySubsBySms=&operationType=1&dateFrom={dateFrom}:00&dateTo={dateTo} 00:00:00&cpohId=0&processingMode=1&subsId={simcards}'.format(dateFrom=dateFrom, dateTo=dateTo,simcards=simcards)
+        requestPayload = f'&p_basket=-1&notifySubsBySms=&operationType=1&dateFrom={dateFrom}:00&dateTo={dateTo} 00:00:00&cpohId=0&processingMode=1&subsId={simcards}'
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
@@ -672,7 +668,7 @@ class LK:
         requestUrl = "https://{address}/changelock/order"
         simcards = ','.join([_["id"] for _ in simlist])
         date = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
-        requestPayload = '&p_basket=-1&notifySubsBySms=&operationType=0&dateFrom={date}:00&cpohId=0&processingMode=1&subsId={simcards}'.format(date=date,simcards=simcards)
+        requestPayload = f'&p_basket=-1&notifySubsBySms=&operationType=0&dateFrom={date}:00&cpohId=0&processingMode=1&subsId={simcards}'
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response:
@@ -693,7 +689,7 @@ class LK:
         requestUrl = "https://{address}/changepkgrateplan/order"
         simcards = ','.join([_["id"] for _ in simlist])
         date = datetime.datetime.utcnow().strftime('%d.%m.%Y')
-        requestPayload = '&p_basket=-1&packList=&cpohId=0&processingMode=1&p_excludeSubs=&rtplId={plan}&dateFrom={date}&subsId={simcards}'.format(plan=plan,date=date,simcards=simcards)
+        requestPayload = f'&p_basket=-1&packList=&cpohId=0&processingMode=1&p_excludeSubs=&rtplId={plan}&dateFrom={date}&subsId={simcards}'
         response = self.__performQuery(requestUrl, requestPayload, contentType="application/x-www-form-urlencoded;charset=UTF-8")
 
         if response and "changeResult" in response and response["changeResult"]["cporId"] > 0:

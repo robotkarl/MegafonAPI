@@ -30,7 +30,7 @@ class VATS:
         self.__password = password
         self.__metadata = []
         self.__session = Session()
-        self.__session.mount('https://{address}'.format(address=address), MegafonHttpAdapter())
+        self.__session.mount(f"https://{address}", MegafonHttpAdapter())
         self.simcards = []
         self.users = []
         self.json = {}
@@ -42,7 +42,7 @@ class VATS:
         }
 
     def log(self, level, message):
-        logging.log(level, "[VATS-{name}] {message}".format(name=self.name, message=message))
+        logging.log(level, f"[VATS-{self.name}] {message}")
 
     def __qStatsAdd(self, fUrl: str):
         t = time.time()
@@ -66,7 +66,7 @@ class VATS:
 
     def qStatsPrint(self):
         qcs = sum(v for k, v in self.__qStats["count"].items())
-        self.log(logging.INFO, "Performed {0} queries in {1} seconds with tMinDiff = {2}s".format(qcs, self.__qStats["lastQuery"] - self.__qStats["firstQuery"], self.__qStats["tMinBetweenQueries"]))
+        self.log(logging.INFO, f"Performed {qcs} queries in {self.__qStats['lastQuery'] - self.__qStats['firstQuery']} seconds with tMinDiff = {self.__qStats['tMinBetweenQueries']}s")
 
     def qWait(self):
         t = time.time() - self.__qStats["lastQuery"]
@@ -94,40 +94,33 @@ class VATS:
             if "XSRF_TOKEN" in self.__session.cookies:
                 headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
 
-            self.log(logging.DEBUG, "[{r}] Performing a request".format(r=r))
-            self.log(logging.DEBUG, " [{r}] METHOD: {method}\n [{r}] URL: {url}\n [{r}] CONTENT-TYPE: '{contenttype}'\n [{r}] DATA: {payload}".format(method=method, url=fUrl, payload=fData, contenttype=contentType, r=r))
+            self.log(logging.DEBUG, f"[{r}] Performing a request")
+            self.log(logging.DEBUG, f" [{r}] METHOD: {method}\n [{r}] URL: {fUrl}\n [{r}] CONTENT-TYPE: '{contentType}'\n [{r}] DATA: {fData}")
             try:
                 self.__qStatsAdd(fUrl)
                 response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
                 response.encoding = "UTF-8"
-                self.log(logging.DEBUG, "[{r}] Got {code} status code from server".format(code=response.status_code, r=r))
+                self.log(logging.DEBUG, f"[{r}] Got {response.status_code} status code from server.")
             except Exception as e:
                 loadFailed = True
-                self.log(logging.DEBUG, "[{r}] Exception occured during server query. {e}".format(r=r, e=e))
+                self.log(logging.DEBUG, f"[{r}] Exception occured during server query. {e}")
             
             if not loadFailed:
                 try:
                     responsePayload = json.loads(response.text) if parseRosponseJson else response.text
                 except Exception as e:
-                    self.log(logging.ERROR, "[{r}] Failed load response JSON: {e}".format(e=e, r=r))
-                    self.log(logging.DEBUG, "[{r}]  DATA: {d}".format(d=response.text, r=r))
+                    self.log(logging.ERROR, f"[{r}] Failed load response JSON: {e}")
+                    self.log(logging.DEBUG, f"[{r}]  DATA: {response.text}")
                     loadFailed = True
                 finally:
                     response.close()
 
         if not loginQuery and (loadFailed or not self.state.loggedin or response.status_code != 200 or loadFailed or (parseRosponseJson and "error" in responsePayload and responsePayload["error"])):
-            self.log(logging.WARNING, "[{r}] Failed getting response from server".format(r=r))
-            self.log(logging.DEBUG, " [{r}] LOGIN QUERY: {loginquery}\n [{r}] LOGGED IN: {loggedin}\n [{r}] STATUS CODE: {statuscode}\n [{r}] LOAD FAILED: {loadfailed}\n [{r}] PAYLOAD: {payload}". format(
-                r=r,
-                loginquery=loginQuery,
-                loggedin=self.state.loggedin,
-                statuscode=response.status_code if response else "",
-                loadfailed=loadFailed,
-                payload=responsePayload
-            ))
+            self.log(logging.WARNING, f"[{r}] Failed getting response from server")
+            self.log(logging.DEBUG, f" [{r}] LOGIN QUERY: {loginQuery}\n [{r}] LOGGED IN: {self.state.loggedin}\n [{r}] STATUS CODE: {response.status_code if response else ''}\n [{r}] LOAD FAILED: {loadFailed}\n [{r}] PAYLOAD: {responsePayload}")
             if not self.state.loggedin or (response and ((response.status_code == 200 and not loadFailed) or (response.status_code == 401) or (response.status_code == 403))):
                 if (not self.state.loggedin or response.status_code == 401 or response.status_code == 403 or (parseRosponseJson and (responsePayload["error"] == "NOT_AUTHENTICATED"))) and not loginQuery:
-                    self.log(logging.INFO, "[{r}] Not authenticated. Trying to login".format(r=r))
+                    self.log(logging.INFO, f"[{r}] Not authenticated. Trying to login")
                     if self.__login():
                         responsePayload = self.__performQuery(url, payload, loginQuery=loginQuery, method=method, parseRosponseJson=parseRosponseJson, contentType=contentType, timeout=timeout)
                         success = True
@@ -153,10 +146,10 @@ class VATS:
                 else:
                     raise Exception("Got empty response from server")
             except Exception as e:
-                self.log(logging.INFO, "Authorization failed. {0}".format(e))
+                self.log(logging.INFO, f"Authorization failed. {e}")
         except Exception as e:
             self.state.loggedin = False
-            self.log(logging.WARNING, "Unable to login. [{exception}]".format(exception=e))
+            self.log(logging.WARNING, f"Unable to login. [{e}]")
         return self.state.loggedin
 
     def getSimCards(self) -> bool:
@@ -173,7 +166,7 @@ class VATS:
             result = True
         else:
             self.simcards = []
-        self.log(logging.INFO, "Got {0} SIM cards from server".format(len(self.simcards)))
+        self.log(logging.INFO, f"Got {len(self.simcards)} SIM cards from server")
 
         return result
 
@@ -191,7 +184,7 @@ class VATS:
             result = True
         else:
             self.users = []
-        self.log(logging.INFO, "Got {0} Users from server".format(len(self.users)))
+        self.log(logging.INFO, f"Got {len(self.users)} Users from server")
 
         return result
 
@@ -227,7 +220,8 @@ class VATS:
                 "p": [dict(CIDs)]
             },
         ]
-        requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
+        data = json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}')
+        requestPayload = f'{{{{"s":"{{authToken}}","u":"{{user}}","d":{data}}}}}'
 
         self.log(logging.INFO, "Attempting to disable simcards")
         response = self.__performQuery(requestUrl, requestPayload)
@@ -276,7 +270,8 @@ class VATS:
                 "p": [dict(CIDs)]
             },
         ]
-        requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
+        data = json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}')
+        requestPayload = f'{{{{"s":"{{authToken}}","u":"{{user}}","d":{data}}}}}'
 
         self.log(logging.INFO, "Attempting to enable simcards")
         response = self.__performQuery(requestUrl, requestPayload)
@@ -309,7 +304,8 @@ class VATS:
                 ]
             }
         ]
-        requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
+        data = json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}')
+        requestPayload = f'{{{{"s":"{{authToken}}","u":"{{user}}","d":{data}}}}}'
 
         self.log(logging.INFO, "Attempting to connect simcards")
         response = self.__performQuery(requestUrl, requestPayload)
@@ -332,16 +328,17 @@ class VATS:
                     "p": [ sim["tn"] ]
                 } 
             ]
-            requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
+            data = json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}')
+            requestPayload = f'{{{{"s":"{{authToken}}","u":"{{user}}","d":{data}}}}}'
 
-            self.log(logging.INFO, "Attempting to remove simcard {sim}".format(sim=sim["tn"]))
+            self.log(logging.INFO, f"Attempting to remove simcard {sim['tn']}")
             response = self.__performQuery(requestUrl, requestPayload)
 
             if response:
-                self.log(logging.INFO, "Simcard {sim} successfully removed".format(sim=sim["tn"]))
+                self.log(logging.INFO, f"Simcard {sim['tn']} successfully removed")
             else:
                 __result = False
-                self.log(logging.INFO, "Simcard {sim} removeing failed".format(sim=sim["tn"]))
+                self.log(logging.INFO, f"Simcard {sim['tn']} removeing failed")
 
         return __result
 
@@ -358,15 +355,16 @@ class VATS:
                     "p": [ user[""] ]
                 } 
             ]
-            requestPayload = '{{{{"s":"{{authToken}}","u":"{{user}}","d":{d}}}}}'.format(d=json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}'))
+            data = json.dumps(d, ensure_ascii=False).replace('{', '{{').replace('}','}}')
+            requestPayload = f'{{{{"s":"{{authToken}}","u":"{{user}}","d":{data}}}}}'
 
-            self.log(logging.INFO, "Attempting to delete user {user}/{userName}".format(user=user[""], userName=user["n"]))
+            self.log(logging.INFO, f"Attempting to delete user {user['']}/{user['n']}")
             response = self.__performQuery(requestUrl, requestPayload)
 
             if response:
-                self.log(logging.INFO, "User {user} successfully removed".format(user=user[""]))
+                self.log(logging.INFO, f"User {user['']} successfully removed")
             else:
                 __result = False
-                self.log(logging.INFO, "User {user} removeing failed".format(user=user[""]))
+                self.log(logging.INFO, f"User {user['']} removeing failed")
 
         return __result        
