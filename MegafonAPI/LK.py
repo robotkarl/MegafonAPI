@@ -399,7 +399,7 @@ class LK:
         __result = False
 
         def balances_fetch_one(sim):
-            self.log(logging.DEBUG, f"Attempting to retrieve balance info for simcard №{sim['id']}/{simPNsim['msisdn']}")
+            self.log(logging.DEBUG, f"Attempting to retrieve balance info for simcard №{sim['id']}/{sim['msisdn']}")
             requesInfotUrl = "https://{{address}}/subscriber/finances/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
