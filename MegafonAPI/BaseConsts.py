@@ -16,7 +16,7 @@ class BaseConsts(Enum):
     No more than this number of queries per second (at list within one session) or you'll get garbage instead of data
     """
 
-    requestTimeout = 30
+    requestTimeout = 60
     parallelRequests = 50
     QPS = 40
 
