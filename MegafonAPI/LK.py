@@ -412,7 +412,8 @@ class LK:
                     'charges': 0.0,
                     'amountLocal': 0.0,
                     'amountRoumnig': 0.0,
-                    'amountLocalMacro': 0.0
+                    'amountLocalMacro': 0.0,
+                    'amountAnotherRegion': 0.0
                 }
                 amountTotal = 0
 
@@ -436,6 +437,9 @@ class LK:
                         elif title == "Прочие услуги в домашнем регионе":
                             balanceinfo['amountLocal'] += amount
                             balanceinfo['amountTotal'] += amount
+                        elif title == "Прочие услуги на территории других филиалов":
+                            balanceinfo['amountAnotherRegion'] += amount
+
                         elif title == "По тарифному плану":
                             pass
                         elif title == "Баланс персонального счета":
