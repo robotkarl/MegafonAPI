@@ -437,6 +437,12 @@ class LK:
                         elif title == "Прочие услуги в домашнем регионе":
                             balanceinfo['amountLocal'] += amount
                             balanceinfo['amountTotal'] += amount
+                        elif title == "Прочие услуги в домашнем филиале":
+                            balanceinfo['amountLocal'] += amount
+                            balanceinfo['amountTotal'] += amount
+                        elif title == "Черный список":
+                            balanceinfo['amountLocal'] += amount
+                            balanceinfo['amountTotal'] += amount                            
                         elif title == "Прочие услуги на территории других филиалов":
                             balanceinfo['amountAnotherRegion'] += amount
 
