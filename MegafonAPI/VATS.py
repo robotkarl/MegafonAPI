@@ -87,15 +87,19 @@ class VATS:
         r += str(int(time.time()*1000))
 
         if self.state.loggedin or loginQuery:
+            try:
+                fUrl = url.format(address=self.__address, r=r, s = "" if loginQuery else self.__metadata["s"])
+                fData = payload.format(address=self.__address, user=self.__user, password=self.__password, authToken = "" if loginQuery else self.__metadata["s"])
+                headers = {'Content-Type': contentType}
+                if "XSRF_TOKEN" in self.__session.cookies:
+                    headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
 
-            fUrl = url.format(address=self.__address, r=r, s = "" if loginQuery else self.__metadata["s"])
-            fData = payload.format(address=self.__address, user=self.__user, password=self.__password, authToken = "" if loginQuery else self.__metadata["s"])
-            headers = {'Content-Type': contentType}
-            if "XSRF_TOKEN" in self.__session.cookies:
-                headers["x-csrf-token"] = self.__session.cookies["XSRF_TOKEN"]
-
-            self.log(logging.DEBUG, f"[{r}] Performing a request")
-            self.log(logging.DEBUG, f" [{r}] METHOD: {method}\n [{r}] URL: {fUrl}\n [{r}] CONTENT-TYPE: '{contentType}'\n [{r}] DATA: {fData}")
+                self.log(logging.DEBUG, f"[{r}] Performing a request")
+                self.log(logging.DEBUG, f" [{r}] METHOD: {method}\n [{r}] URL: {fUrl}\n [{r}] CONTENT-TYPE: '{contentType}'\n [{r}] DATA: {fData}")
+            except Exception as e:
+                loadFailed = True
+                self.log(logging.INFO, "Bad Login, need re-login to account")
+                self.state.loggedin = False
             try:
                 self.__qStatsAdd(fUrl)
                 response = self.__session.request(method=method, url=fUrl, data=fData.encode("utf-8"), headers=headers, timeout=timeout)
