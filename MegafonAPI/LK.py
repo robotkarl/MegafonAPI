@@ -195,7 +195,7 @@ class LK:
 
         def fetch_one(sim):
             self.log(logging.DEBUG, f"Attempting to retrieve remains info for simcard №{sim['id']}/{sim['msisdn']}")
-            requesInfotUrl = "https://{{address}}/subscriber/info/{simID}"
+            requesInfotUrl = "https://{{address}}/d/subscriber/info/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
                 html = pq(result)
@@ -267,7 +267,7 @@ class LK:
 
         def services_fetch_one(sim):
             self.log(logging.DEBUG, f"Attempting to retrieve services info for simcard №{sim['id']}/{sim['msisdn']}")
-            requesInfotUrl = "https://{{address}}/subscriber/servicesAndRateoptions/{simID}"
+            requesInfotUrl = "https://{{address}}/d/subscriber/servicesAndRateoptions/{simID}"
             try:
                 result = self.__performQuery(requesInfotUrl.format(simID=sim["id"]), "", method="GET", parseRosponseJson=False)
                 html = pq(result)
@@ -502,7 +502,7 @@ class LK:
             discounts: list = None
             for _ in range(10):
                 try:
-                    requestUrl = "https://{{address}}/subscriber/info/{simID}/discounts?_={{r}}"
+                    requestUrl = "https://{{address}}/d/subscriber/info/{simID}/discounts?_={{r}}"
                     resultMinutes = self.__performQuery(requestUrl.format(simID=sim["id"]), "", method="GET")
                     if resultMinutes:
                         discounts = resultMinutes["discounts"]["oapiDiscounts"]
@@ -565,12 +565,12 @@ class LK:
             dcrules = None
             for _ in range(10):
                 try:
-                    requestUrl = "https://{{address}}/subscriber/dcrule/{simID}/dcrules?_={{r}}"
+                    requestUrl = "https://{{address}}/d/subscriber/dcrule/{simID}/dcrules?_={{r}}"
                     resultRules = self.__performQuery(requestUrl.format(simID=sim["id"]), "", method="GET")
                     if resultRules:
                         dcrules = resultRules['list']
                         for dcrule in dcrules:
-                            requestUrl = "https://{{address}}/subscriber/dcrule/{simID}/dcrules/{ruleID}?_={{r}}"
+                            requestUrl = "https://{{address}}/d/subscriber/dcrule/{simID}/dcrules/{ruleID}?_={{r}}"
                             resultRuleDetail = self.__performQuery(requestUrl.format(simID=sim["id"], ruleID=dcrule["subscriberDistributeChargesRuleSetId"]), "", method="GET")
                             if resultRuleDetail:
                                 dcrule["detail"] = resultRuleDetail['list']
